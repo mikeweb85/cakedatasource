@@ -1,6 +1,6 @@
 <?php
 
-namespace App\ElasticSearch;
+namespace MikeWeb\CakeSources\ElasticSearch;
 
 use Cake\ElasticSearch\Query;
 use Cake\Utility\Inflector;

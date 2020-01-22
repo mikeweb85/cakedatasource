@@ -1,7 +1,6 @@
 <?php
 
-namespace App\Mailer\Transport;
-
+namespace MikeWeb\CakeSources\Mailer\Transport;
 
 use SendGrid;
 use SendGrid\Mail\Mail;

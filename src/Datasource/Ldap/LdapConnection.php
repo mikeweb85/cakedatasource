@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Ldap;
+namespace MikeWeb\CakeSources\Ldap;
 
 use Cake\Core\InstanceConfigTrait;
 use Cake\Core\Configure;
@@ -12,9 +12,11 @@ use Cake\Database\Log\QueryLogger;
 use ErrorException;
 use Cake\Cache\Cache;
 use Cake\Core\Exception\Exception;
-use MikeWeb\Dsn\Dsn as DSN;
+use MikeWeb\Dsn\Dsn;
+use Psr\SimpleCache\CacheInterface;
 
-class Connection implements ConnectionInterface {
+
+class LdapConnection implements ConnectionInterface {
     
     use InstanceConfigTrait;
     
@@ -90,7 +92,7 @@ class Connection implements ConnectionInterface {
      * @return void
      * @throws Exception
      */
-    public static function setInstance(Connection $connection) {
+    public static function setInstance(LdapConnection $connection) {
         $domain = $connection->getDomain();
         
         if ( isset(self::$_instances[$domain]) && !empty(self::$_instances[$domain]) ) {
@@ -119,7 +121,7 @@ class Connection implements ConnectionInterface {
         }
         
         if ( !empty($config['dsn']) ) {
-            $dsn = new DSN($config['dsn']);
+            $dsn = new Dsn($config['dsn']);
             
             if ( $dsn->isValid() ) {
                 $config['host'] = $dsn->getHosts();
@@ -411,4 +413,49 @@ class Connection implements ConnectionInterface {
     public function disableQueryLogging() {
         return false;
     }
+ /**
+  * {@inheritDoc}
+  * @see \Cake\Datasource\ConnectionInterface::setCacher()
+  */
+ public function setCacher(CacheInterface $cacher) {
+  // TODO: Auto-generated method stub
+
+ }
+
+ /**
+  * {@inheritDoc}
+  * @see \Cake\Datasource\ConnectionInterface::getCacher()
+  */
+ public function getCacher() {
+  // TODO: Auto-generated method stub
+
+ }
+
+ /**
+  * {@inheritDoc}
+  * @see \Cake\Datasource\ConnectionInterface::config()
+  */
+ public function config() {
+  // TODO: Auto-generated method stub
+
+ }
+
+ /**
+  * {@inheritDoc}
+  * @see \Cake\Datasource\ConnectionInterface::getDriver()
+  */
+ public function getDriver() {
+  // TODO: Auto-generated method stub
+
+ }
+
+ /**
+  * {@inheritDoc}
+  * @see \Cake\Datasource\ConnectionInterface::query($sql)
+  */
+ public function query($sql) {
+  // TODO: Auto-generated method stub
+
+ }
+
 }

@@ -1,17 +1,17 @@
-<?php 
+<?php
 
-namespace SqlServer\Database\Driver;
+namespace MikeWeb\CakeSources\Database\Driver\Odbc;
 
 use Cake\Database\Driver\Sqlserver;
-use SqlServer\Database\Dialect\DblibDialectTrait;
-use PDO;
+use Cake\Database\Dialect\SqlserverDialectTrait;
+use MikeWeb\CakeSources\Database\Driver\OdbcTrait;
 
-class Dblib extends Sqlserver {
+class Sqlserver extends Sqlserver {
     
-    use DblibDialectTrait;
+    use OdbcTrait, SqlserverDialectTrait;
     
     public function enabled() {
-        return in_array('dblib', PDO::getAvailableDrivers());
+        return $this->_enabled();
     }
     
     /**
@@ -26,20 +26,14 @@ class Dblib extends Sqlserver {
         
         $config = $this->_config;
         
-        $dsn = 'dblib:';
-        
-        if ( !empty($config['tds_version']) ) {
-            $dsn .= "version={$config['tds_version']};";
+        if ( empty($config['odbcDriver']) ) {
+            $config['odbcDriver'] = 'SQL Native Client';
         }
         
-        if ( !empty($config['encoding']) ) {
-            $dsn .= "charset={$config['encoding']};";
-        }
-        
-        $dsn .= "host={$config['host']};port={$config['port']};dbname={$config['database']}";
+        $dsn = "odbc:Driver={{$config['odbcDriver']}};Server={$config['host']},{$config['port']};Database={$config['database']};";
         
         $this->_connect($dsn, $config);
-    
+        
         $connection = $this->getConnection();
         
         if (!empty($config['init']))  {
@@ -53,7 +47,7 @@ class Dblib extends Sqlserver {
                 $connection->exec("SET {$key} {$value}");
             }
         }
-    
+        
         return true;
     }
     

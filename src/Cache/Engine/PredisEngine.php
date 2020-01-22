@@ -1,19 +1,6 @@
 <?php
-/**
- * CakePHP(tm) : Rapid Development Framework (https://cakephp.org)
- * Copyright (c) Cake Software Foundation, Inc. (https://cakefoundation.org)
- *
- * Licensed under The MIT License
- * For full copyright and license information, please see the LICENSE.txt
- * Redistributions of files must retain the above copyright notice.
- *
- * @copyright     Copyright (c) Cake Software Foundation, Inc. (https://cakefoundation.org)
- * @link          https://cakephp.org CakePHP(tm) Project
- * @since         2.2.0
- * @license       https://opensource.org/licenses/mit-license.php MIT License
- */
 
-namespace CakePredis\Cache\Engine;
+namespace MikeWeb\CakeSources\Cache\Engine;
 
 use Cake\Cache\CacheEngine;
 use Predis\Client;
@@ -26,7 +13,7 @@ use Predis\Connection\StreamConnection;
 use Predis\Connection\PhpiredisSocketConnection;
 use Predis\Connection\PhpiredisStreamConnection;
 // use Predis\Connection\CompositeStreamConnection;
-use Nyholm\DSN;
+use MikeWeb\Dsn\Dsn;
 use Cake\Utility\Hash;
 
 /**
@@ -86,7 +73,7 @@ class PredisEngine extends CacheEngine {
     public function init(array $config = []) {
         // check for enhanced dsn parsing
         if ( !empty($config['dsn']) ) {
-            $dsn = new DSN($config['dsn']);
+            $dsn = new Dsn($config['dsn']);
             
             if ( $dsn->isValid() ) {
                 $config = Hash::merge($config, $dsn->getParameters());
@@ -398,4 +385,22 @@ class PredisEngine extends CacheEngine {
             $this->_client->disconnect();
         }
     }
+    /**
+     * {@inheritDoc}
+     * @see \Cake\Cache\CacheEngine::get()
+     */
+    public function get ($key, $default = null) {
+        // TODO Auto-generated method stub
+        
+    }
+
+    /**
+     * {@inheritDoc}
+     * @see \Cake\Cache\CacheEngine::set()
+     */
+    public function set ($key, $value, $ttl = null): bool {
+        // TODO Auto-generated method stub
+        
+    }
+
 }

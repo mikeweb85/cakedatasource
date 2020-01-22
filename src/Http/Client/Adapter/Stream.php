@@ -1,13 +1,11 @@
 <?php
 
-namespace App\Http\Client\Adapter;
-
+namespace MikeWeb\CakeSources\Http\Client\Adapter;
 
 use Cake\Utility\Hash;
 use Cake\Core\Configure;
 use Cake\Http\Client\Request;
 use Cake\Http\Client\Adapter\Stream as CakeStream;
-
 
 
 class Stream extends CakeStream {

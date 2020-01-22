@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Amqp;
+namespace MikeWeb\CakeSources\Datasource\Amqp;
 
 use Cake\Core\InstanceConfigTrait;
 use PhpAmqpLib\Connection\AMQPStreamConnection;
@@ -848,4 +848,49 @@ class Connection implements ConnectionInterface {
      public function disableQueryLogging() {
          return false;
      }
+ /**
+  * {@inheritDoc}
+  * @see \Cake\Datasource\ConnectionInterface::setCacher()
+  */
+ public function setCacher(CacheInterface $cacher) {
+  // TODO: Auto-generated method stub
+
+ }
+
+ /**
+  * {@inheritDoc}
+  * @see \Cake\Datasource\ConnectionInterface::getCacher()
+  */
+ public function getCacher() {
+  // TODO: Auto-generated method stub
+
+ }
+
+ /**
+  * {@inheritDoc}
+  * @see \Cake\Datasource\ConnectionInterface::config()
+  */
+ public function config() {
+  // TODO: Auto-generated method stub
+
+ }
+
+ /**
+  * {@inheritDoc}
+  * @see \Cake\Datasource\ConnectionInterface::getDriver()
+  */
+ public function getDriver() {
+  // TODO: Auto-generated method stub
+
+ }
+
+ /**
+  * {@inheritDoc}
+  * @see \Cake\Datasource\ConnectionInterface::query($sql)
+  */
+ public function query($sql) {
+  // TODO: Auto-generated method stub
+
+ }
+
 }

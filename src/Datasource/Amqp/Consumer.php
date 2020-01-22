@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Amqp;
+namespace MikeWeb\CakeSources\Datasource\Amqp;
 
 use React\EventLoop\LoopInterface;
 use React\EventLoop\TimerInterface;

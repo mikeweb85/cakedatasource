@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http;
+namespace MikeWeb\CakeSources\Http;
 
 use SoapVar;
 use SoapFault;

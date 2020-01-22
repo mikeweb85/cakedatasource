@@ -1,6 +1,6 @@
 <?php
 
-namespace App\ElasticSearch;
+namespace MikeWeb\CakeSources\ElasticSearch;
 
 use Cake\ElasticSearch\Document as CakeDocument;
 use Cake\ElasticSearch\IndexRegistry;
@@ -14,8 +14,7 @@ class Document extends CakeDocument {
         
         parent::__construct($data, $options);
     }
-    
-    
+        
     public function set($property, $value=null, array $options=[]) {
         if (is_string($property) && $property !== '') {
             $property = [$property=>$value];
@@ -32,8 +31,7 @@ class Document extends CakeDocument {
         
         return parent::set($property, $options);
     }
-    
-    
+        
     protected function _arrayIsNumeric(array $data) {
         if ( empty($data) ) {
             return true;
@@ -41,7 +39,6 @@ class Document extends CakeDocument {
         
         return ( array_keys($data) === range(0, count($data)-1) );
     }
-    
     
     protected function _createAsDocument(array $data, $index=null) {
         if ( !empty($data) ) {

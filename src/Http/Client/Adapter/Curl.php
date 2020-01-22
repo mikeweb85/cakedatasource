@@ -1,14 +1,12 @@
 <?php
 
-namespace App\Http\Client\Adapter;
-
+namespace MikeWeb\CakeSources\Http\Client\Adapter;
 
 use Cake\Http\Client\Request;
 use Cake\Http\Client\Response;
 use Cake\Core\Exception\Exception;
-use Cake\Network\Exception\HttpException;
-use App\Http\Client\Adapter\Stream;
-
+use Cake\Http\Exception\HttpException;
+use MikeWeb\CakeSources\Http\Client\Adapter\Stream;
 
 
 class Curl extends Stream {

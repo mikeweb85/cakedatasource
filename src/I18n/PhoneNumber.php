@@ -1,6 +1,6 @@
 <?php
 
-namespace App\I18n;
+namespace MikeWeb\CakeSources\I18n;
 
 
 use Cake\Core\Configure;

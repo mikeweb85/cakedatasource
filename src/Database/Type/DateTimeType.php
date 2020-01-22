@@ -1,9 +1,10 @@
 <?php
 
-namespace SqlServer\Database\Type;
+namespace MikeWeb\CakeSources\Database\Type;
 
 use Cake\Database\Driver;
 use Cake\Database\Type\DateTimeType as CakeDateTimeType;
+
 
 class DateTimeType extends CakeDateTimeType {
     

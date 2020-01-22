@@ -1,7 +1,7 @@
 <?php
 
 
-namespace App\Http\Session;
+namespace MikeWeb\CakeSources\Http\Session;
 
 use Cake\Cache\Cache;
 use Cake\Core\Configure;

@@ -1,6 +1,6 @@
 <?php
 
-namespace CakePredis\Datasource;
+namespace MikeWeb\CakeSources\Datasource;
 
 use Exception as BaseException;
 use InvalidArgumentException;
@@ -17,17 +17,17 @@ use Cake\Core\Exception\Exception;
 use Cake\Database\Log\LoggedQuery;
 use Predis\Client;
 use Predis\ClientException;
+use MikeWeb\Dsn\Dsn;
 // use Predis\Cluster\Distributor\HashRing;
 // use Predis\Connection\Aggregate\PredisCluster;
 // use Predis\Connection\Aggregate\MasterSlaveReplication;
 use Predis\Connection\ConnectionInterface as PredisConnectionInterface;
 use Predis\Connection\PhpiredisSocketConnection;
 use Predis\Connection\PhpiredisStreamConnection;
-use Nyholm\DSN;
 use Predis\Command\CommandInterface;
 
 
-class Connection implements ConnectionInterface {
+class PredisConnection implements ConnectionInterface {
     
     use InstanceConfigTrait;
     
@@ -90,7 +90,7 @@ class Connection implements ConnectionInterface {
      * @return boolean|array[]
      */
     public static function parseDSN($dsn) {
-        $dsn = new DSN($dsn);
+        $dsn = new Dsn($dsn);
         
         if ( !$dsn->isValid() ) {
             return false;
@@ -398,4 +398,40 @@ class Connection implements ConnectionInterface {
     public function disableSavePoints() {
         return $this;
     }
+ /**
+  * {@inheritDoc}
+  * @see \Cake\Datasource\ConnectionInterface::setCacher()
+  */
+ public function setCacher(CacheInterface $cacher) {
+  // TODO: Auto-generated method stub
+
+ }
+
+ /**
+  * {@inheritDoc}
+  * @see \Cake\Datasource\ConnectionInterface::getCacher()
+  */
+ public function getCacher() {
+  // TODO: Auto-generated method stub
+
+ }
+
+ /**
+  * {@inheritDoc}
+  * @see \Cake\Datasource\ConnectionInterface::config()
+  */
+ public function config() {
+  // TODO: Auto-generated method stub
+
+ }
+
+ /**
+  * {@inheritDoc}
+  * @see \Cake\Datasource\ConnectionInterface::query($sql)
+  */
+ public function query($sql) {
+  // TODO: Auto-generated method stub
+
+ }
+
 }
