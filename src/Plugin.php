@@ -4,8 +4,6 @@ namespace MikeWeb\CakeSources;
 
 use Cake\Core\BasePlugin;
 use Cake\Core\PluginApplicationInterface;
-use Cake\Datasource\ConnectionManager;
-use MikeWeb\CakeSources\Database\Driver\Odbc\Sqlserver;
 
 /**
  * Plugin for CakePHP Datasources
@@ -17,7 +15,7 @@ class Plugin extends BasePlugin {
      * {@inheritDoc}
      * @see \Cake\Core\BasePlugin::bootstrap()
      */
-    public function bootstrap(PluginApplicationInterface $app) {
+    public function bootstrap(PluginApplicationInterface $app): void {
         ## TODO: Post load bootstrapping?
     }
 }

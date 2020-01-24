@@ -2,16 +2,22 @@
 
 namespace MikeWeb\CakeSources\Database\Driver\Odbc;
 
+use PDO;
 use Cake\Database\Driver\Sqlserver;
 use Cake\Database\Dialect\SqlserverDialectTrait;
 use MikeWeb\CakeSources\Database\Driver\OdbcTrait;
+use MikeWeb\CakeSources\Datasource\ConnectionManager;
 
 class Sqlserver extends Sqlserver {
     
     use OdbcTrait, SqlserverDialectTrait;
     
     public function enabled() {
-        return $this->_enabled();
+        if ( !in_array('odbc', PDO::getAvailableDrivers()) ) {
+            return false;
+        }
+        
+        return ( !empty(ConnectionManager::getOdbcDriversMap('sqlserver')) );
     }
     
     /**

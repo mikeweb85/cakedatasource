@@ -2,15 +2,11 @@
 
 namespace MikeWeb\CakeSources\Database\Driver;
 
-use Cake\Database\Driver;
 use PDO;
+use Cake\Database\Driver;
 
 
 trait OdbcTrait {
-    
-    protected function _enabled() {
-        return in_array('odbc', PDO::getAvailableDrivers());
-    }
     
     /**
      *
@@ -22,7 +18,13 @@ trait OdbcTrait {
      * UsageCount=1
      *
      */
-    protected function _initialize() {
-        ## TODO: scan for drivers
+    protected function _enabled() {
+        if ( !in_array('odbc', PDO::getAvailableDrivers()) ) {
+            return false;
+        }
+        
+        
+        
+        
     }
 }
