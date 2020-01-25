@@ -1,42 +1,40 @@
 <?php
 
-namespace MikeWeb\CakeSources\Database\Driver\Odbc;
+namespace MikeWeb\CakeSources\Database\Driver;
 
 use PDO;
 use Cake\Database\Driver\Sqlserver;
 use Cake\Database\Dialect\SqlserverDialectTrait;
 use MikeWeb\CakeSources\Database\Driver\OdbcTrait;
-use MikeWeb\CakeSources\Datasource\ConnectionManager;
 
-class Sqlserver extends Sqlserver {
+
+class OdbcSqlserver extends Sqlserver {
     
     use OdbcTrait, SqlserverDialectTrait;
     
-    public function enabled() {
-        if ( !in_array('odbc', PDO::getAvailableDrivers()) ) {
-            return false;
-        }
-        
-        return ( !empty(ConnectionManager::getOdbcDriversMap('sqlserver')) );
+    /**
+     * {@inheritDoc}
+     */
+    public function enabled(): bool {
+        return ( in_array('odbc', PDO::getAvailableDrivers()) );
     }
     
     /**
-     * Establishes a connection to the database server
-     *
-     * @return bool true on success
+     * {@inheritDoc}
      */
-    public function connect() {
+    public function connect(): bool {
         if ($this->_connection) {
             return true;
         }
         
         $config = $this->_config;
         
-        if ( empty($config['odbcDriver']) ) {
-            $config['odbcDriver'] = 'SQL Native Client';
+        if ( empty($config['driverName']) ) {
+            $config['driverName'] = 'SQL Native Client';
         }
         
-        $dsn = "odbc:Driver={{$config['odbcDriver']}};Server={$config['host']},{$config['port']};Database={$config['database']};";
+        $dsn = "odbc:Driver={{$config['driverName']}};Server={$config['host']},{$config['port']};Database={$config['database']};";
+        ## TODO: add extended connection params
         
         $this->_connect($dsn, $config);
         
@@ -60,7 +58,7 @@ class Sqlserver extends Sqlserver {
     /**
      * {@inheritDoc}
      */
-    public function supportsDynamicConstraints() {
+    public function supportsDynamicConstraints(): bool {
         return false;
     }
 }

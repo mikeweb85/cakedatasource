@@ -3,26 +3,62 @@
 namespace MikeWeb\CakeSources\Datasource;
 
 use SplFileInfo;
+use Cake\Utility\Hash;
 use InvalidArgumentException;
 use MikeWeb\CakeSources\Cache\Cache;
 use MikeWeb\CakeSources\Core\DsnConfigTrait;
+use MikeWeb\CakeSources\Database\Driver\OdbcSqlserver;
 use Cake\Datasource\ConnectionManager as CakeConnectionManager;
-use MikeWeb\CakeSources\Database\Driver\Odbc\Sqlserver;
-use Cake\Utility\Hash;
 
 
-class ConnectionManager extends CakeConnectionManager {
+class OdbcConnectionManager extends CakeConnectionManager {
     
     use DsnConfigTrait;
     
     protected static $_odbcClassMap;
     
-    protected static function _parseDsn(string $dsn): array {
-        $dsnString = $dsn;
-        
-        $config = static::_enhancedParseDsn($dsnString);
-        
-        return $config;
+    public static function setConfig($key, $config=null): void {
+        CakeConnectionManager::setConfig($key, $config);
+    }
+    
+    public static function getConfig(string $key) {
+        return CakeConnectionManager::getConfig($key);
+    }
+    
+    public static function get(string $name, bool $useAliases=true) {
+        return CakeConnectionManager::get($name, $useAliases);
+    }
+    
+    public static function dropAlias(string $name): void {
+        CakeConnectionManager::dropAlias($name);
+    }
+    
+    public static function alias(string $alias, string $source): void {
+        CakeConnectionManager::alias($alias, $source);
+    }
+    
+    public static function getConfigOrFail(string $key) {
+        return CakeConnectionManager::getConfigOrFail($key);
+    }
+    
+    public static function drop(string $config): bool {
+        return CakeConnectionManager::drop($config);
+    }
+    
+    public static function configured(): array {
+        return CakeConnectionManager::configured();
+    }
+    
+    public static function setDsnClassMap(array $map): void {
+        CakeConnectionManager::setDsnClassMap($map);
+    }
+    
+    public static function getDsnClassMap(): array {
+        return CakeConnectionManager::getDsnClassMap();
+    }
+    
+    public static function parseDsn(string $dsn): array {
+        return static::_enhancedParseDsn($dsn);
     }
     
     public static function bootstrap(): void {
@@ -34,14 +70,14 @@ class ConnectionManager extends CakeConnectionManager {
         $driverMap = static::getOdbcDriversMap();
         
         if ( array_key_exists('sqlserver', $driverMap) ) {
-            $map['sqlserver-odbc'] = Sqlserver::class;
+            $map['sqlserver-odbc'] = OdbcSqlserver::class;
             
             if ( trim(`uname`) == 'Linux' ) {
-                $map['sqlserver'] = Sqlserver::class;
+                $map['sqlserver'] = OdbcSqlserver::class;
             }
         }
         
-        ConnectionManager::setDsnClassMap($map);
+        CakeConnectionManager::setDsnClassMap($map);
     }
     
     public static function getOdbcDriversMap(string $protocol=null): array {
