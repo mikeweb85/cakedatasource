@@ -3,7 +3,7 @@
 namespace MikeWeb\CakeSources\ElasticSearch;
 
 use Cake\ElasticSearch\Document as CakeDocument;
-use Cake\ElasticSearch\IndexRegistry;
+// use Cake\ElasticSearch\IndexRegistry;
 use Cake\Utility\Inflector;
 
 

@@ -15,12 +15,16 @@
     "repositories": [
 	    {
 	        "type": "vcs",
+	        "url": "git@github.com:mikeweb85/dsn.git"
+	    },
+	    {
+	        "type": "vcs",
 	        "url": "git@github.com:mikeweb85/elastic-search.git"
 	    }
 	],
     "require": {
         "cakephp/cakephp": "^3.6|^3.7|^4.0",
-        "mikeweb85/dsn": "^1.0",
+        "mikeweb85/dsn": "dev-master",
         "php-amqplib/php-amqplib": "^2.8",
         "predis/predis": "^1.1",
         "sendgrid/sendgrid": "^7.4",

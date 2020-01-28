@@ -1,31 +1,41 @@
 <?php
-
-namespace MikeWeb\CakeSources\Cache\Engine;
-
-use Cake\Cache\CacheEngine;
-use Predis\Client;
-use Predis\ClientException;
-// use Predis\Cluster\Distributor\HashRing;
-// use Predis\Connection\Aggregate\PredisCluster;
-// use Predis\Connection\Aggregate\MasterSlaveReplication;
-use Predis\Connection\ConnectionInterface;
-use Predis\Connection\StreamConnection;
-use Predis\Connection\PhpiredisSocketConnection;
-use Predis\Connection\PhpiredisStreamConnection;
-// use Predis\Connection\CompositeStreamConnection;
-use MikeWeb\Dsn\Dsn;
-use Cake\Utility\Hash;
+declare(strict_types=1);
 
 /**
- * Predis client for Redis storage engine
+ * CakePHP(tm) : Rapid Development Framework (https://cakephp.org)
+ * Copyright (c) Cake Software Foundation, Inc. (https://cakefoundation.org)
+ *
+ * Licensed under The MIT License
+ * For full copyright and license information, please see the LICENSE.txt
+ * Redistributions of files must retain the above copyright notice.
+ *
+ * @copyright     Copyright (c) Cake Software Foundation, Inc. (https://cakefoundation.org)
+ * @link          https://cakephp.org CakePHP(tm) Project
+ * @since         1.2.0
+ * @license       https://opensource.org/licenses/mit-license.php MIT License
  */
+namespace MikeWeb\CakeSources\Cache\Engine;
+
+use DateInterval;
+use Predis\Client;
+use Predis\ClientException;
+use Cake\Utility\Text;
+use Cake\Utility\Hash;
+use Cake\Core\Exception\Exception;
+use Cake\Cache\CacheEngine;
+use Predis\Connection\PhpiredisSocketConnection;
+use Predis\Connection\PhpiredisStreamConnection;
+use Cake\Cache\InvalidArgumentException;
+
+
 class PredisEngine extends CacheEngine {
     
     /**
-     * Predis wrapper.
+     * Predis wrapper
+     * 
      * @var \Predis\Client
      */
-    protected $_client;
+    protected $_PredisClient;
     
     /**
      * The default config used unless overridden by runtime configuration
@@ -39,9 +49,9 @@ class PredisEngine extends CacheEngine {
      * - `port` port number to the Redis server.
      * - `prefix` Prefix appended to all entries. Good for when you need to share a keyspace
      *    with either another cache config or another application.
-     * - `probability` Probability of hitting a cache gc cleanup. Setting to 0 will disable
-     *    cache::gc from ever being called automatically.
+     * - `server` URL or ip to the Redis server host.
      * - `timeout` timeout in seconds (float).
+     * - `unix_socket` Path to the unix socket file (default: false)
      *
      * @var array
      */
@@ -49,70 +59,47 @@ class PredisEngine extends CacheEngine {
         'database'              => 0,
         'duration'              => 3600,
         'groups'                => [],
-        'prefix'                => 'cake_predis_',
-        'probability'           => 100,
-        'persistent'            => false,
-        'groups'                => [],
-        'host'                  => null,
-        'password'              => null,
+        'password'              => false,
+        'persistent'            => true,
+        'port'                  => 6379,
+        'prefix'                => 'cake:',
+        'host'                  => '127.0.0.1',
+        'cluster'               => null,
+        'replication'           => null,
+        'service'               => null,
         'timeout'               => 5,
-        'async'                 => false,
-        'read_write_timeout'    => 60,
-        'iterable_multibulk'    => false,
-        'throw_errors'          => true,
         'profile'               => null,
-        'fallback'              => null,
     ];
     
     /**
      * Initialize the Cache Engine
+     *
      * Called automatically by the cache frontend
+     *
      * @param array $config array of setting for the engine
      * @return bool True if the engine has been successfully initialized, false if not
      */
-    public function init(array $config = []) {
-        // check for enhanced dsn parsing
-        if ( !empty($config['dsn']) ) {
-            $dsn = new Dsn($config['dsn']);
-            
-            if ( $dsn->isValid() ) {
-                $config = Hash::merge($config, $dsn->getParameters());
-                $config['host'] = $dsn->getHosts();
-                $config['password'] = $dsn->getPassword();
-                $config['database'] = $dsn->getDatabase();
-            }
+    public function init(array $config = []): bool {
+        if (!extension_loaded('redis')) {
+            return false;
         }
         
-        if ( !is_array($config['host']) ) {
-            $config['host'] = [$config['host']];
+        if (!empty($config['host'])) {
+            $config['server'] = $config['host'];
         }
         
         parent::init($config);
-        
-        var_dump($this->_config); die();
         
         return $this->_connect();
     }
     
     /**
-     * Parse hosts into configured array
-     * @return array
-     */
-    private function _parseHosts() {
-        
-        return [];
-    }
-    
-    /**
      * Connects to a Redis server
+     *
      * @return bool True if Redis server was connected
      */
-    protected function _connect() {
-        $connections = [];
-        
-        $options = [
-            
-        ];
+    protected function _connect(): bool {
+        $connections = $options = [];
         
         if ( extension_loaded('phpiredis') ) {
             $options['connections'] = [
@@ -121,284 +108,159 @@ class PredisEngine extends CacheEngine {
             ];
         }
         
-        try {
-            $connections = [];
-            
-            foreach ($this->_config['servers'] as $server) {
-                if ( !is_array($server) ) {
-                    $parts = @parse_url($server);
-                    
-                    $server = [
-                        'async'                 => $this->_config['async'],
-                        'timeout'               => $this->_config['timeout'],
-                        'read_write_timeout'    => $this->_config['read_write_timeout'],
-                        'weight'                => $this->_config['weight'],
-                        'iterable_multibulk'    => $this->_config['iterable_multibulk'],
-                        'throw_errors'          => $this->_config['throw_errors'],
-                        'persistent'            => $this->_config['persistent'],
-                    ];
-                    
-                    if ( empty($parts['scheme']) && empty($parts['host']) ) {
-                        if ( empty($parts['path']) ) {
-                            continue;
-                        }
+        switch (true) {
+            case is_string($this->_config['host']):
+                $connections[] = $this->_config['host'];
+                break;
+                
+            case (array_keys($this->_config['host']) === range(0, count($this->_config['host'])-1)):
+                foreach ($this->_config['host'] as $host) {
+                    if ( is_string($host) ) {
+                        $connections[] = $host;
                         
-                        if ( false !== ($socket = @realpath($parts['path'])) ) {
-                            $server['scheme'] = 'unix';
-                            $server['path'] = $socket;
-                            
-                        } else {
-                            $server['scheme'] = 'tcp';
-                            $server['host'] = $parts['path'];
-                        }
+                    } elseif ( is_array($host) && (isset($host['scheme']) && isset($host['host'])) ) {
+                        $connections[] = "{$host['scheme']}://{$host['host']}:{$host['port']}";
                         
                     } else {
-                        $server['scheme'] = $parts['scheme'] ?: 'tcp';
-                        $server['host'] = $parts['host'];
-                        $server['port'] = $parts['port'] ?: '6379';
-                    }
-                    
-                    $queryParts = [];
-                    
-                    @parse_str($parts['query'], $queryParts);
-                    
-                    if ( !empty($queryParts['password']) ) {
-                        $server['password'] = $queryParts['password'];
-                        
-                    } elseif ( !empty($this->_config['password']) ) {
-                        $server['password'] = $this->_config['password'];
-                    }
-                    
-                    if ( !empty($queryParts['database']) ) {
-                        $server['database'] = $queryParts['database'];
-                        
-                    } else {
-                        $server['database'] = $this->_config['database'];
+                        throw new InvalidArgumentException();
                     }
                 }
+                break;
                 
-                $connections[] = $server;
-            }
-            
-            $options = [
-                'prefix'            => $this->_config['prefix'],
-            ];
-            
-            $this->_client = new Client($connections, $options);
-            $this->_client->connect();
-            
+            case (isset($this->_config['host']['scheme']) && isset($this->_config['host']['host'])):
+                $connections[] = "{$this->_config['host']['scheme']}://{$this->_config['host']['host']}:{$this->_config['host']['port']}";
+                break;
+                
+            default:
+                throw new InvalidArgumentException();
+        }
+        
+        $options = [
+            'profile'           => $this->_config['profile'],
+            'prefix'            => $this->_config['prefix'],
+            'exceptions'        => true,
+            'persistent'        => $this->_config['persistent'],
+            'cluster'           => $this->_config['cluster'],
+            'replication'       => $this->_config['replication'],
+            'service'           => $this->_config['service'],
+            'timeout'           => $this->_config['timeout'],
+            'parameters'        => [
+                'database'          => (int) $this->_config['database'],
+            ],
+        ];
+        
+        if ( !empty($this->_config['password']) ) {
+            $options['parameters']['password'] = $this->_config['password'];
+        }
+        
+        try {
+            $this->_PredisClient = new Client($connections, $options);
+            return true;
             
         } catch (ClientException $e) {
-            return false;
-        }
-        
-        return $this->_client->isConnected();
-    }
-    
-    
-    /**
-     * Write data for key into cache.
-     *
-     * @param string $key Identifier for the data
-     * @param mixed $value Data to be cached
-     * @return bool True if the data was successfully cached, false on failure
-     */
-    public function write($key, $value) {
-        $key = $this->_key($key);
-        
-        if (!is_int($value)) {
-            $value = serialize($value);
-        }
-        
-        $duration = $this->_config['duration'];
-        
-        if ($duration === 0) {
-            return $this->_client->set($key, $value);
-        }
-        
-        return $this->_client->setEx($key, $duration, $value);
-    }
-    
-    
-    /**
-     * Read a key from the cache
-     *
-     * @param string $key Identifier for the data
-     * @return mixed The cached data, or false if the data doesn't exist, has expired, or if there was an error fetching it
-     */
-    public function read($key) {
-        $key = $this->_key($key);
-        
-        $value = $this->_client->get($key);
-        
-        if (preg_match('/^[-]?\d+$/', $value)) {
-            return (int)$value;
-        }
-        
-        if ($value !== false && is_string($value)) {
-            return unserialize($value);
-        }
-        
-        return $value;
-    }
-    
-    
-    /**
-     * Increments the value of an integer cached key & update the expiry time
-     *
-     * @param string $key Identifier for the data
-     * @param int $offset How much to increment
-     * @return bool|int New incremented value, false otherwise
-     */
-    public function increment($key, $offset = 1) {
-        $duration = $this->_config['duration'];
-        $key = $this->_key($key);
-        
-        $value = (int)$this->_client->incrBy($key, $offset);
-        
-        if ($duration > 0) {
-            $this->_client->expire($key, $duration);
-        }
-        
-        return $value;
-    }
-    
-    
-    /**
-     * Decrements the value of an integer cached key & update the expiry time
-     *
-     * @param string $key Identifier for the data
-     * @param int $offset How much to subtract
-     * @return bool|int New decremented value, false otherwise
-     */
-    public function decrement($key, $offset = 1) {
-        $duration = $this->_config['duration'];
-        $key = $this->_key($key);
-        
-        $value = (int)$this->_client->decrBy($key, $offset);
-        
-        if ($duration > 0) {
-            $this->_client->expire($key, $duration);
-        }
-        
-        return $value;
-    }
-    
-    
-    /**
-     * Delete a key from the cache
-     *
-     * @param string $key Identifier for the data
-     * @return bool True if the value was successfully deleted, false if it didn't exist or couldn't be removed
-     */
-    public function delete($key) {
-        $key = $this->_key($key);
-        
-        return $this->_client->del([$key]) > 0;
-    }
-    
-    
-    /**
-     * Delete all keys from the cache
-     *
-     * @param bool $check If true will check expiration, otherwise delete all.
-     * @return bool True if the cache was successfully cleared, false otherwise
-     */
-    public function clear($check) {
-        if ($check) {
-            return true;
-        }
-        
-        $keys = $this->_client->getKeys($this->_config['prefix'] . '*');
-        
-        return $this->_client->del($keys);
-    }
-    
-    
-    /**
-     * Write data for key into cache if it doesn't exist already.
-     * If it already exists, it fails and returns false.
-     *
-     * @param string $key Identifier for the data.
-     * @param mixed $value Data to be cached.
-     * @return bool True if the data was successfully cached, false on failure.
-     * @link https://github.com/phpredis/phpredis#setnx
-     */
-    public function add($key, $value) {
-        $duration = $this->_config['duration'];
-        $key = $this->_key($key);
-        
-        if (!is_int($value)) {
-            $value = serialize($value);
-        }
-        
-        // setNx() doesn't have an expiry option, so follow up with an expiry
-        if ($this->_client->setNx($key, $value)) {
-            return $this->_client->expire($key, $duration);
+            throw new Exception($e->getMessage());
         }
         
         return false;
     }
     
-    
     /**
-     * Returns the `group value` for each of the configured groups
-     * If the group initial value was not found, then it initializes
-     * the group accordingly.
+     * Serialize value for saving to Redis.
      *
-     * @return array
+     * This is needed instead of using Redis' in built serialization feature
+     * as it creates problems incrementing/decrementing intially set integer value.
+     *
+     * @param mixed $value Value to serialize.
+     * @return string
+     * @link https://github.com/phpredis/phpredis/issues/81
      */
-    public function groups() {
-        $result = [];
-        foreach ($this->_config['groups'] as $group) {
-            $value = $this->_client->get($this->_config['prefix'] . $group);
-            
-            if (!$value) {
-                $value = 1;
-                $this->_client->set($this->_config['prefix'] . $group, $value);
-            }
-            
-            $result[] = $group . $value;
+    protected function serialize($value): string {
+        if (is_int($value)) {
+            return (string)$value;
         }
         
-        return $result;
+        return json_encode($value);
     }
     
-    
     /**
-     * Increments the group value to simulate deletion of all keys under a group
-     * old values will remain in storage until they expire.
+     * Unserialize string value fetched from Redis.
      *
-     * @param string $group name of the group to be cleared
-     * @return bool success
+     * @param string $value Value to unserialize.
+     * @return mixed
      */
-    public function clearGroup($group) {
-        return (bool)$this->_client->incr($this->_config['prefix'] . $group);
-    }
-    
-    
-    /**
-     * Disconnects from the redis server
-     */
-    public function __destruct() {
-        if (empty($this->_config['persistent']) && $this->_client instanceof Client) {
-            $this->_client->disconnect();
+    protected function unserialize(string $value) {
+        if (preg_match('/^[-]?\d+$/', $value)) {
+            return (int)$value;
         }
+        
+        return json_decode($value);
     }
+    
     /**
      * {@inheritDoc}
      * @see \Cake\Cache\CacheEngine::get()
      */
-    public function get ($key, $default = null) {
-        // TODO Auto-generated method stub
+    public function get($key, $default=null) {
+        if ( false === ($value = $this->_PredisClient->get($key)) ) {
+            return $default;
+        }
         
+        return $this->unserialize($value);
     }
 
     /**
      * {@inheritDoc}
      * @see \Cake\Cache\CacheEngine::set()
      */
-    public function set ($key, $value, $ttl = null): bool {
+    public function set($key, $value, $ttl=null): bool {
+        // TODO Auto-generated method stub
+        $key = $this->_key($key);
+        $value = $this->serialize($value);
+        
+        
+    }
+
+    /**
+     * {@inheritDoc}
+     * @see \Cake\Cache\CacheEngine::increment()
+     */
+    public function increment(string $key, int $offset=1) {
+        // TODO Auto-generated method stub
+        
+    }
+
+    /**
+     * {@inheritDoc}
+     * @see \Cake\Cache\CacheEngine::decrement()
+     */
+    public function decrement(string $key, int $offset=1) {
+        // TODO Auto-generated method stub
+        
+    }
+
+    /**
+     * {@inheritDoc}
+     * @see \Cake\Cache\CacheEngine::delete()
+     */
+    public function delete($key): bool {
+        // TODO Auto-generated method stub
+        
+    }
+
+    /**
+     * {@inheritDoc}
+     * @see \Cake\Cache\CacheEngine::clear()
+     */
+    public function clear(): bool {
+        // TODO Auto-generated method stub
+        
+    }
+
+    /**
+     * {@inheritDoc}
+     * @see \Cake\Cache\CacheEngine::clearGroup()
+     */
+    public function clearGroup(string $group): bool {
         // TODO Auto-generated method stub
         
     }
