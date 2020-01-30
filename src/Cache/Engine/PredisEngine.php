@@ -16,7 +16,6 @@ declare(strict_types=1);
  */
 namespace MikeWeb\CakeSources\Cache\Engine;
 
-use DateInterval;
 use Predis\Client;
 use Predis\ClientException;
 use Cake\Utility\Text;
@@ -26,6 +25,7 @@ use Cake\Cache\CacheEngine;
 use Predis\Connection\PhpiredisSocketConnection;
 use Predis\Connection\PhpiredisStreamConnection;
 use Cake\Cache\InvalidArgumentException;
+use Predis\Collection\Iterator\Keyspace;
 
 
 class PredisEngine extends CacheEngine {
@@ -149,12 +149,13 @@ class PredisEngine extends CacheEngine {
             ],
         ];
         
-        if ( !empty($this->_config['password']) ) {
-            $options['parameters']['password'] = $this->_config['password'];
-        }
-        
         try {
-            $this->_PredisClient = new Client($connections, $options);
+            $this->_PredisClient = @(new Client($connections, $options));
+            
+            if ( !empty($this->_config['password']) ) {
+                $this->_PredisClient->auth($this->_config['password']);
+            }
+            
             return true;
             
         } catch (ClientException $e) {
@@ -213,11 +214,15 @@ class PredisEngine extends CacheEngine {
      * @see \Cake\Cache\CacheEngine::set()
      */
     public function set($key, $value, $ttl=null): bool {
-        // TODO Auto-generated method stub
         $key = $this->_key($key);
         $value = $this->serialize($value);
+        $duration = $this->duration($ttl);
         
+        if ($duration === 0) {
+            return $this->_PredisClient->set($key, $value);
+        }
         
+        return $this->_PredisClient->setex($key, $duration, $value);
     }
 
     /**
@@ -225,8 +230,15 @@ class PredisEngine extends CacheEngine {
      * @see \Cake\Cache\CacheEngine::increment()
      */
     public function increment(string $key, int $offset=1) {
-        // TODO Auto-generated method stub
+        $key = $this->_key($key);
+        $duration = $this->_config['duration'];
+        $value = (int)$this->_PredisClient->incrby($key, $offset);
         
+        if ($duration > 0) {
+            $this->_PredisClient->expire($key, $duration);
+        }
+        
+        return $value;
     }
 
     /**
@@ -234,8 +246,15 @@ class PredisEngine extends CacheEngine {
      * @see \Cake\Cache\CacheEngine::decrement()
      */
     public function decrement(string $key, int $offset=1) {
-        // TODO Auto-generated method stub
+        $key = $this->_key($key);
+        $duration = $this->_config['duration'];
+        $value = (int)$this->_PredisClient->decrby($key, $offset);
         
+        if ($duration > 0) {
+            $this->_PredisClient->expire($key, $duration);
+        }
+        
+        return $value;
     }
 
     /**
@@ -243,8 +262,7 @@ class PredisEngine extends CacheEngine {
      * @see \Cake\Cache\CacheEngine::delete()
      */
     public function delete($key): bool {
-        // TODO Auto-generated method stub
-        
+        return $this->_PredisClient->del([$this->_key($key)]) > 0;
     }
 
     /**
@@ -252,17 +270,54 @@ class PredisEngine extends CacheEngine {
      * @see \Cake\Cache\CacheEngine::clear()
      */
     public function clear(): bool {
-        // TODO Auto-generated method stub
+        $isAllDeleted = true;
+        $pattern = $this->_config['prefix'] . '*';
+        $iterator = new Keyspace($this->_PredisClient, $pattern);
         
+        foreach ($iterator as $key) {
+            $isDeleted = ($this->_PredisClient->del([$key]) > 0);
+            $isAllDeleted = $isAllDeleted && $isDeleted;
+        }
+        
+        return $isAllDeleted;
     }
-
+    
     /**
-     * {@inheritDoc}
-     * @see \Cake\Cache\CacheEngine::clearGroup()
+     * Returns the `group value` for each of the configured groups
+     * If the group initial value was not found, then it initializes
+     * the group accordingly.
+     *
+     * @return string[]
+     */
+    public function groups(): array {
+        $result = [];
+        
+        foreach ($this->_config['groups'] as $group) {
+            $value = $this->_PredisClient->get($this->_config['prefix'] . $group);
+            
+            if (!$value) {
+                $value = $this->serialize(1);
+                $this->_PredisClient->set($this->_config['prefix'] . $group, $value);
+            }
+            
+            $result[] = $group . $value;
+        }
+        
+        return $result;
+    }
+    
+    /**
+     * Increments the group value to simulate deletion of all keys under a group
+     * old values will remain in storage until they expire.
+     *
+     * @param string $group name of the group to be cleared
+     * @return bool success
      */
     public function clearGroup(string $group): bool {
-        // TODO Auto-generated method stub
-        
+        return (bool)$this->_PredisClient->incr($this->_config['prefix'] . $group);
     }
-
+    
+    public function getEngine(): Client {
+        return $this->_PredisClient;
+    }
 }
