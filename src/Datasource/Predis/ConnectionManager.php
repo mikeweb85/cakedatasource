@@ -24,12 +24,12 @@ class ConnectionManager extends CakeConnectionManager {
      * @psalm-var array<string, class-string>
      */
     protected static $_dsnClassMap = [
-        'tcp'           => 'tcp',
         'redis'         => 'tcp',
-        'tls'           => 'tls',
         'rediss'        => 'tls',
+        /* 'tcp'           => 'tcp',
+        'tls'           => 'tls',
         'unix'          => 'unix',
-        'socket'        => 'unix',
+        'socket'        => 'unix', */
     ];
     
     /**

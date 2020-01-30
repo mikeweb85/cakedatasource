@@ -29,7 +29,9 @@ use \Psr\Log\LoggerInterface;
 
 class Connection implements ConnectionInterface {
     
-    use InstanceConfigTrait, TypeConverterTrait;
+    use InstanceConfigTrait;
+    
+    protected static $_registry;
     
     /**
      * Contains the configuration params for this connection.
@@ -129,7 +131,7 @@ class Connection implements ConnectionInterface {
         'timeout'               => 5,
         'profile'               => null,
     ];
-    
+        
     protected function parseDsn(string $config): array {
         return ConnectionManager::parseDsn($config);
     }
