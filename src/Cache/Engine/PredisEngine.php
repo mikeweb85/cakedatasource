@@ -1,41 +1,61 @@
 <?php
 declare(strict_types=1);
 
-/**
- * CakePHP(tm) : Rapid Development Framework (https://cakephp.org)
- * Copyright (c) Cake Software Foundation, Inc. (https://cakefoundation.org)
- *
- * Licensed under The MIT License
- * For full copyright and license information, please see the LICENSE.txt
- * Redistributions of files must retain the above copyright notice.
- *
- * @copyright     Copyright (c) Cake Software Foundation, Inc. (https://cakefoundation.org)
- * @link          https://cakephp.org CakePHP(tm) Project
- * @since         1.2.0
- * @license       https://opensource.org/licenses/mit-license.php MIT License
- */
-namespace MikeWeb\CakeSources\Cache\Engine;
+namespace MikeWeb\CakeSources\Datasource\Predis;
 
-use Predis\Client;
-use Predis\ClientException;
 use Cake\Utility\Text;
 use Cake\Utility\Hash;
 use Cake\Core\Exception\Exception;
+use Cake\Cache\InvalidArgumentException;
+
+use Psr\SimpleCache\CacheInterface;
+use Cake\Cache\CacheEngineInterface;
+use Cake\Database\TypeConverterTrait;
 use Cake\Cache\CacheEngine;
+
+use Predis\Client;
+use Predis\ClientException;
+use Predis\Profile\ProfileInterface;
+use Predis\Collection\Iterator\Keyspace;
 use Predis\Connection\PhpiredisSocketConnection;
 use Predis\Connection\PhpiredisStreamConnection;
-use Cake\Cache\InvalidArgumentException;
-use Predis\Collection\Iterator\Keyspace;
+use Predis\Connection\AggregateConnectionInterface;
 
 
-class PredisEngine extends CacheEngine {
+class PredisEngine extends CacheEngine implements CacheInterface, CacheEngineInterface {
+    
+    use TypeConverterTrait;
+    
+    protected const SEPARATOR = ':';
+    
+    protected const SERIALIZE_JSON = 'json';
+    
+    protected const SERIALIZE_PHP = 'php';
     
     /**
-     * Predis wrapper
-     * 
+     * Client for Redis connection
      * @var \Predis\Client
      */
-    protected $_PredisClient;
+    protected $_client;
+    
+    /**
+     * Protocol map for connections
+     * @var array
+     */
+    protected $_clientSchemeMap = [
+        'predis'        => 'tcp',
+        'prediss'       => 'tls',
+        'redis'         => 'tcp',
+        'rediss'        => 'tls',
+        'tcp'           => 'tcp',
+        'tls'           => 'tls',
+    ];
+    
+    /**
+     * List of custom implemented commands
+     * @var array
+     */
+    protected $_customCommands = [];
     
     /**
      * The default config used unless overridden by runtime configuration
@@ -56,6 +76,7 @@ class PredisEngine extends CacheEngine {
      * @var array
      */
     protected $_defaultConfig = [
+        'scheme'                => 'tcp',
         'database'              => 0,
         'duration'              => 3600,
         'groups'                => [],
@@ -64,41 +85,118 @@ class PredisEngine extends CacheEngine {
         'port'                  => 6379,
         'prefix'                => 'cake:',
         'host'                  => '127.0.0.1',
-        'cluster'               => null,
         'replication'           => null,
         'service'               => null,
         'timeout'               => 5,
         'profile'               => null,
+        'ssl'                   => null,
+        'iterable'              => null,
+        'timeout'               => 5,
+        'read_write_timeout'    => null,
     ];
     
     /**
-     * Initialize the Cache Engine
-     *
-     * Called automatically by the cache frontend
-     *
-     * @param array $config array of setting for the engine
-     * @return bool True if the engine has been successfully initialized, false if not
+     * {@inheritDoc}
+     * @see \Cake\Cache\CacheEngine::get()
      */
-    public function init(array $config = []): bool {
-        if (!extension_loaded('redis')) {
-            return false;
-        }
-        
-        if (!empty($config['host'])) {
-            $config['server'] = $config['host'];
+    public function init(array $config=[]): bool {
+        if ( isset($config['auth']) ) {
+            $config['password'] = $config['auth'];
+            unset($config['auth']);
         }
         
         parent::init($config);
         
-        return $this->_connect();
+        if ( false === $this->connect() ) {
+            ## TODO: error handling
+        }
+        
+        return true;
     }
     
     /**
-     * Connects to a Redis server
-     *
-     * @return bool True if Redis server was connected
+     * Returns staandard scheme required for connection
+     * @param string $scheme
+     * @throws InvalidArgumentException
+     * @return string
      */
-    protected function _connect(): bool {
+    protected function _getValidScheme(string $scheme): string {
+        if ( !isset($this->_clientSchemeMap[$scheme]) || empty($this->_clientSchemeMap[$scheme]) ) {
+            throw new InvalidArgumentException();
+        }
+        
+        return $this->_clientSchemeMap[$scheme];
+    }
+    
+    /**
+     * Normalize connection objets
+     * @param array $connection
+     * @return array
+     */
+    protected function _buildConnectionWithParams(array $connection): array {
+        try {
+            set_error_handler(function ($severity, $message, $file, $line) {
+                throw new Exception($message, $severity, $severity, $file, $line);
+            });
+                
+            $connection += [
+                'iterable_multibulk'    => (bool)$this->_config['iterable'],
+                'timeout'               => floatval($this->_config['timeout']),
+                'persistent'            => (bool)$this->_config['persistent'],
+            ];
+            
+            if ( !isset($connection['port']) ) {
+                $connection['port'] = (int)$this->_config['port'];
+            }
+            
+            if ( !empty($this->_config['read_write_timeout']) ) {
+                $new['read_write_timeout'] = floatval($this->_config['read_write_timeout']);
+            }
+            
+            if ( !empty($this->_config['ssl']) ) {
+                $connection += [
+                    'scheme'        => 'tls',
+                    'ssl'           => $this->_config['ssl'],
+                ];
+                
+            } elseif ( isset($connection['ssl']) ) {
+                $connection['scheme'] = 'tls';
+                
+            } elseif ( isset($connection['scheme']) ) {
+                $connection['scheme'] = $this->_getValidScheme($connection['scheme']);
+                
+            } else {
+                $connection['scheme'] == $this->_getValidScheme($this->_config['scheme']);
+            }
+        
+        } catch (Exception $e) {
+            ## TODO: exception handling
+            
+        } finally {
+            restore_error_handler();
+        }
+        
+        return $connection;
+    }
+    
+    /**
+     * Returns if the wrapped client is connected
+     * @return bool
+     */
+    public function connected(): bool {
+        if ( !empty($this->_client) ) {
+            return $this->_client->isConnected();
+        }
+        
+        return false;
+    }
+    
+    /**
+     * Instantiates the Predis client
+     * @throws \Cake\Core\Exception
+     * @return bool
+     */
+    protected function connect(): bool {
         $connections = $options = [];
         
         if ( extension_loaded('phpiredis') ) {
@@ -108,216 +206,205 @@ class PredisEngine extends CacheEngine {
             ];
         }
         
-        switch (true) {
-            case is_string($this->_config['host']):
-                $connections[] = $this->_config['host'];
-                break;
+        $master = false;
+        
+        if ( is_array($this->_config['host']) ) {
+            foreach ($this->_config['host'] as $connection) {
+                $connection = $this->_buildConnectionWithParams($connection);
                 
-            case (array_keys($this->_config['host']) === range(0, count($this->_config['host'])-1)):
-                foreach ($this->_config['host'] as $host) {
-                    if ( is_string($host) ) {
-                        $connections[] = $host;
-                        
-                    } elseif ( is_array($host) && (isset($host['scheme']) && isset($host['host'])) ) {
-                        $connections[] = "{$host['scheme']}://{$host['host']}:{$host['port']}";
-                        
-                    } else {
-                        throw new InvalidArgumentException();
-                    }
+                if ( isset($connection['alias']) && $connection['alias'] == 'master' ) {
+                    $master = true;
                 }
-                break;
                 
-            case (isset($this->_config['host']['scheme']) && isset($this->_config['host']['host'])):
-                $connections[] = "{$this->_config['host']['scheme']}://{$this->_config['host']['host']}:{$this->_config['host']['port']}";
-                break;
-                
-            default:
-                throw new InvalidArgumentException();
+                $connections[] = $connection;
+            }
+            
+        } else {
+            $connections[] = $this->_buildConnectionWithParams([$this->_config['host']]);
         }
         
-        $options = [
-            'profile'           => $this->_config['profile'],
-            'prefix'            => $this->_config['prefix'],
-            'exceptions'        => true,
-            'persistent'        => $this->_config['persistent'],
-            'cluster'           => $this->_config['cluster'],
-            'replication'       => $this->_config['replication'],
-            'service'           => $this->_config['service'],
-            'timeout'           => $this->_config['timeout'],
-            'parameters'        => [
-                'database'          => (int) $this->_config['database'],
-            ],
-        ];
+        if ( !empty($this->_config['profile']) ) {
+            if ( !($this->_config['profile'] instanceof ProfileInterface || is_string($this->_config['profile'])) ) {
+                throw new InvalidArgumentException('Invalid Redis profile.');
+            }
+            
+            $options['profile'] = $this->_config['profile'];
+        }
+        
+        if ( !empty($this->_config['replication']) ) {
+            if ( count($connections) < 2 ) {
+                throw new InvalidArgumentException('More than one server required for an aggregate connection.');
+            }
+            
+            switch ($this->_config['replication']) {
+                case true:
+                case 'redis':
+                    $options['replication'] = true;
+                    
+                    if ( !$master ) {
+                        $connections[0]['alias'] = 'master';
+                    }
+                    
+                    break; break;
+                    
+                case 'cluster':
+                    $options['cluster'] = 'redis';
+                    break;
+                    
+                case 'sentinel':
+                    $options['replication'] = 'sentinel';
+                    
+                    if ( empty($this->_config['service']) || !is_string($this->_config['service']) ) {
+                        throw new InvalidArgumentException('A sentinel service name is required and string type.');
+                    }
+                    
+                    $options['service'] = $this->_config['service'];
+                    break;
+                    
+                default:
+                    if ( !($this->_config['replication'] instanceof AggregateConnectionInterface || is_callable($this->_config['replication'])) ) {
+                        throw new InvalidArgumentException('Unknown or invalid replication method.');
+                    }
+                    
+                    $options['replication'] = $this->_config['replication'];
+            }
+        }
         
         try {
-            $this->_PredisClient = @(new Client($connections, $options));
+            set_error_handler(function ($severity, $message, $file, $line) {
+                throw new Exception($message, $severity, $severity, $file, $line);
+            });
+            
+            $this->_client = new Client($connections, $options);
             
             if ( !empty($this->_config['password']) ) {
-                $this->_PredisClient->auth($this->_config['password']);
+                $this->_client->auth($this->_config['password']);
             }
+            
+            $this->_client->select((int)$this->_config['database']);
             
             return true;
             
-        } catch (ClientException $e) {
+        } catch(ClientException $e) {
             throw new Exception($e->getMessage());
+            
+        } catch (Exception $e) {
+            ## TODO: handle general warning/error
+            
+        } finally {
+            restore_error_handler();
         }
         
         return false;
     }
     
     /**
-     * Serialize value for saving to Redis.
-     *
-     * This is needed instead of using Redis' in built serialization feature
-     * as it creates problems incrementing/decrementing intially set integer value.
-     *
-     * @param mixed $value Value to serialize.
-     * @return string
-     * @link https://github.com/phpredis/phpredis/issues/81
-     */
-    protected function serialize($value): string {
-        if (is_int($value)) {
-            return (string)$value;
-        }
-        
-        return json_encode($value);
-    }
-    
-    /**
-     * Unserialize string value fetched from Redis.
-     *
-     * @param string $value Value to unserialize.
-     * @return mixed
-     */
-    protected function unserialize(string $value) {
-        if (preg_match('/^[-]?\d+$/', $value)) {
-            return (int)$value;
-        }
-        
-        return json_decode($value);
-    }
-    
-    /**
      * {@inheritDoc}
-     * @see \Cake\Cache\CacheEngine::get()
+     * @see \Psr\SimpleCache\CacheInterface::get()
      */
-    public function get($key, $default=null) {
-        if ( false === ($value = $this->_PredisClient->get($key)) ) {
-            return $default;
-        }
+    public function get(string $key, $default=null, array $options=[]) {
+        // TODO Auto-generated method stub
         
-        return $this->unserialize($value);
     }
 
     /**
      * {@inheritDoc}
-     * @see \Cake\Cache\CacheEngine::set()
+     * @see \Psr\SimpleCache\CacheInterface::set()
      */
-    public function set($key, $value, $ttl=null): bool {
-        $key = $this->_key($key);
-        $value = $this->serialize($value);
-        $duration = $this->duration($ttl);
+    public function set(string $key, $value, $ttl=null) {
+        // TODO Auto-generated method stub
         
-        if ($duration === 0) {
-            return $this->_PredisClient->set($key, $value);
-        }
-        
-        return $this->_PredisClient->setex($key, $duration, $value);
     }
 
     /**
      * {@inheritDoc}
-     * @see \Cake\Cache\CacheEngine::increment()
+     * @see \Psr\SimpleCache\CacheInterface::delete()
      */
-    public function increment(string $key, int $offset=1) {
-        $key = $this->_key($key);
-        $duration = $this->_config['duration'];
-        $value = (int)$this->_PredisClient->incrby($key, $offset);
+    public function delete(string $key) {
+        // TODO Auto-generated method stub
         
-        if ($duration > 0) {
-            $this->_PredisClient->expire($key, $duration);
-        }
-        
-        return $value;
     }
 
     /**
      * {@inheritDoc}
-     * @see \Cake\Cache\CacheEngine::decrement()
+     * @see \Psr\SimpleCache\CacheInterface::clear()
      */
-    public function decrement(string $key, int $offset=1) {
-        $key = $this->_key($key);
-        $duration = $this->_config['duration'];
-        $value = (int)$this->_PredisClient->decrby($key, $offset);
+    public function clear() {
+        // TODO Auto-generated method stub
         
-        if ($duration > 0) {
-            $this->_PredisClient->expire($key, $duration);
-        }
-        
-        return $value;
     }
 
     /**
      * {@inheritDoc}
-     * @see \Cake\Cache\CacheEngine::delete()
+     * @see \Psr\SimpleCache\CacheInterface::getMultiple()
      */
-    public function delete($key): bool {
-        return $this->_PredisClient->del([$this->_key($key)]) > 0;
+    public function getMultiple(array $keys, $default = null) {
+        // TODO Auto-generated method stub
+        
     }
 
     /**
      * {@inheritDoc}
-     * @see \Cake\Cache\CacheEngine::clear()
+     * @see \Psr\SimpleCache\CacheInterface::setMultiple()
      */
-    public function clear(): bool {
-        $isAllDeleted = true;
-        $pattern = $this->_config['prefix'] . '*';
-        $iterator = new Keyspace($this->_PredisClient, $pattern);
+    public function setMultiple(array $values, $ttl = null) {
+        // TODO Auto-generated method stub
         
-        foreach ($iterator as $key) {
-            $isDeleted = ($this->_PredisClient->del([$key]) > 0);
-            $isAllDeleted = $isAllDeleted && $isDeleted;
-        }
-        
-        return $isAllDeleted;
     }
+
+    /**
+     * {@inheritDoc}
+     * @see \Psr\SimpleCache\CacheInterface::deleteMultiple()
+     */
+    public function deleteMultiple(array $keys) {
+        // TODO Auto-generated method stub
+        
+    }
+
+    /**
+     * {@inheritDoc}
+     * @see \Psr\SimpleCache\CacheInterface::has()
+     */
+    public function has(string $key) {
+        // TODO Auto-generated method stub
+        
+    }
+    /**
+     * {@inheritDoc}
+     * @see \Cake\Cache\CacheEngineInterface::add()
+     */
+    public function add(string $key, $value): bool {
+        // TODO Auto-generated method stub
+        
+    }
+
+    /**
+     * {@inheritDoc}
+     * @see \Cake\Cache\CacheEngineInterface::increment()
+     */
+    public function increment(string $key, int $offset = 1) {
+        // TODO Auto-generated method stub
+        
+    }
+
+    /**
+     * {@inheritDoc}
+     * @see \Cake\Cache\CacheEngineInterface::decrement()
+     */
+    public function decrement(string $key, int $offset = 1) {
+        // TODO Auto-generated method stub
+        
+    }
+
+    /**
+     * {@inheritDoc}
+     * @see \Cake\Cache\CacheEngineInterface::clearGroup()
+     */
+    public function clearGroup(\Cake\Cache\string $group): bool {
+        // TODO Auto-generated method stub
+        
+    }
+
+
     
-    /**
-     * Returns the `group value` for each of the configured groups
-     * If the group initial value was not found, then it initializes
-     * the group accordingly.
-     *
-     * @return string[]
-     */
-    public function groups(): array {
-        $result = [];
-        
-        foreach ($this->_config['groups'] as $group) {
-            $value = $this->_PredisClient->get($this->_config['prefix'] . $group);
-            
-            if (!$value) {
-                $value = $this->serialize(1);
-                $this->_PredisClient->set($this->_config['prefix'] . $group, $value);
-            }
-            
-            $result[] = $group . $value;
-        }
-        
-        return $result;
-    }
-    
-    /**
-     * Increments the group value to simulate deletion of all keys under a group
-     * old values will remain in storage until they expire.
-     *
-     * @param string $group name of the group to be cleared
-     * @return bool success
-     */
-    public function clearGroup(string $group): bool {
-        return (bool)$this->_PredisClient->incr($this->_config['prefix'] . $group);
-    }
-    
-    public function getEngine(): Client {
-        return $this->_PredisClient;
-    }
 }
