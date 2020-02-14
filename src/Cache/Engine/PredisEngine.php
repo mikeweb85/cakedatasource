@@ -1,42 +1,56 @@
 <?php
 declare(strict_types=1);
 
-namespace MikeWeb\CakeSources\Datasource\Predis;
+namespace MikeWeb\CakeSources\Cache\Engine;
 
-use Cake\Utility\Text;
-use Cake\Utility\Hash;
+use Cake\Log\Log;
+use Cake\Core\Configure;
 use Cake\Core\Exception\Exception;
 use Cake\Cache\InvalidArgumentException;
 
 use Psr\SimpleCache\CacheInterface;
 use Cake\Cache\CacheEngineInterface;
-use Cake\Database\TypeConverterTrait;
+// use Cake\Database\TypeConverterTrait;
 use Cake\Cache\CacheEngine;
 
 use Predis\Client;
 use Predis\ClientException;
+use Predis\Response\Status;
 use Predis\Profile\ProfileInterface;
 use Predis\Collection\Iterator\Keyspace;
 use Predis\Connection\PhpiredisSocketConnection;
 use Predis\Connection\PhpiredisStreamConnection;
 use Predis\Connection\AggregateConnectionInterface;
 
+use Exception as BaseException;
 
-class PredisEngine extends CacheEngine implements CacheInterface, CacheEngineInterface {
+
+class PredisEngine extends CacheEngine implements CacheEngineInterface, CacheInterface {
     
-    use TypeConverterTrait;
+    ## TODO: implement schema/entity object hashing and data type conversions
+    // use TypeConverterTrait;
     
     protected const SEPARATOR = ':';
+    
+    protected const HASH_SEPARATOR = '::';
     
     protected const SERIALIZE_JSON = 'json';
     
     protected const SERIALIZE_PHP = 'php';
+    
+    protected const STATUS_SUCCESS = 'OK';
     
     /**
      * Client for Redis connection
      * @var \Predis\Client
      */
     protected $_client;
+    
+    /**
+     * debug status of client
+     * @var bool
+     */
+    protected $_debug;
     
     /**
      * Protocol map for connections
@@ -96,6 +110,18 @@ class PredisEngine extends CacheEngine implements CacheInterface, CacheEngineInt
     ];
     
     /**
+     * Returns Predis client used for connection
+     * @return \Predis\Client|false
+     */
+    public function getClient() {
+        if ( !empty($this->_client) && $this->_client instanceof Client ) {
+            return $this->_client;
+        }
+        
+        return false;
+    }
+    
+    /**
      * {@inheritDoc}
      * @see \Cake\Cache\CacheEngine::get()
      */
@@ -107,8 +133,10 @@ class PredisEngine extends CacheEngine implements CacheInterface, CacheEngineInt
         
         parent::init($config);
         
+        $this->_debug = Configure::read('debug');
+        
         if ( false === $this->connect() ) {
-            ## TODO: error handling
+            $this->__debug(new Exception('Connection failed for an unknown reason.'), [], true);
         }
         
         return true;
@@ -136,7 +164,7 @@ class PredisEngine extends CacheEngine implements CacheInterface, CacheEngineInt
     protected function _buildConnectionWithParams(array $connection): array {
         try {
             set_error_handler(function ($severity, $message, $file, $line) {
-                throw new Exception($message, $severity, $severity, $file, $line);
+                throw new Exception($message, $severity);
             });
                 
             $connection += [
@@ -150,7 +178,7 @@ class PredisEngine extends CacheEngine implements CacheInterface, CacheEngineInt
             }
             
             if ( !empty($this->_config['read_write_timeout']) ) {
-                $new['read_write_timeout'] = floatval($this->_config['read_write_timeout']);
+                $connection['read_write_timeout'] = floatval($this->_config['read_write_timeout']);
             }
             
             if ( !empty($this->_config['ssl']) ) {
@@ -166,11 +194,11 @@ class PredisEngine extends CacheEngine implements CacheInterface, CacheEngineInt
                 $connection['scheme'] = $this->_getValidScheme($connection['scheme']);
                 
             } else {
-                $connection['scheme'] == $this->_getValidScheme($this->_config['scheme']);
+                $connection['scheme'] = $this->_getValidScheme($this->_config['scheme']);
             }
         
         } catch (Exception $e) {
-            ## TODO: exception handling
+            $this->__debug($e, ['connection'=>$connection], true);
             
         } finally {
             restore_error_handler();
@@ -220,7 +248,18 @@ class PredisEngine extends CacheEngine implements CacheInterface, CacheEngineInt
             }
             
         } else {
-            $connections[] = $this->_buildConnectionWithParams([$this->_config['host']]);
+            $connections[] = $this->_buildConnectionWithParams(['host'=>$this->_config['host']]);
+        }
+        
+        $options = [
+            'prefix'                => $this->_config['prefix'],
+            'parameters'            => [
+                'database'              => (int)$this->_config['database'],
+             ]
+        ];
+        
+        if ( !empty($this->_config['password']) ) {
+            $options['parameters']['password'] = $this->_config['password'];
         }
         
         if ( !empty($this->_config['profile']) ) {
@@ -272,24 +311,18 @@ class PredisEngine extends CacheEngine implements CacheInterface, CacheEngineInt
         
         try {
             set_error_handler(function ($severity, $message, $file, $line) {
-                throw new Exception($message, $severity, $severity, $file, $line);
+                throw new Exception($message, $severity);
             });
             
             $this->_client = new Client($connections, $options);
             
-            if ( !empty($this->_config['password']) ) {
-                $this->_client->auth($this->_config['password']);
-            }
-            
-            $this->_client->select((int)$this->_config['database']);
-            
             return true;
             
         } catch(ClientException $e) {
-            throw new Exception($e->getMessage());
+            $this->__debug($e, ['connections'=>$connections, 'options'=>$options], true);
             
         } catch (Exception $e) {
-            ## TODO: handle general warning/error
+            $this->__debug($e, ['connections'=>$connections, 'options'=>$options], true);
             
         } finally {
             restore_error_handler();
@@ -300,111 +333,441 @@ class PredisEngine extends CacheEngine implements CacheInterface, CacheEngineInt
     
     /**
      * {@inheritDoc}
+     * @see \Cake\Cache\CacheEngine::_key()
+     */
+    protected function _key($key): string {
+        $parts = [];
+        
+        if ( false !== (strpos($key, self::HASH_SEPARATOR)) ) {
+            list($key, $field) = explode(self::HASH_SEPARATOR, $key, 2);
+            $this->ensureValidKey($field);
+            $parts[1] = trim($field, self::SEPARATOR);
+        }
+        
+        $this->ensureValidKey($key);
+        
+        $prefix = '';
+        
+        if ($this->_groupPrefix) {
+            $prefix = md5(implode(self::SEPARATOR, $this->groups()));
+        }
+        
+        $key = preg_replace('/[\s]+/', self::SEPARATOR, (string)$key);
+        $parts[0] = trim($prefix . $key, self::SEPARATOR);
+        
+        return implode(self::HASH_SEPARATOR, $parts);
+    }
+    
+    /**
+     * @param string $key
+     * @return array
+     */
+    protected function _hashKey(string $key) {
+        $field = null;
+        $key = $this->_key($key);
+        
+        if ( false !== (strpos($key, self::HASH_SEPARATOR)) ) {
+            list($key, $field) = explode(self::HASH_SEPARATOR, $key, 2);
+        }
+        
+        return [$key, $field];
+    }
+    
+    /**
+     * Serialize value for saving to Redis.
+     *
+     * This is needed instead of using Redis' in built serialization feature
+     * as it creates problems incrementing/decrementing intially set integer value.
+     *
+     * @param mixed $value Value to serialize.
+     * @return string
+     * @link https://github.com/phpredis/phpredis/issues/81
+     */
+    protected function serialize($value): string {
+        if ( is_int($value) ) {
+            return (string)$value;
+        }
+        
+        return serialize($value);
+    }
+    
+    /**
+     * Unserialize string value fetched from Redis.
+     * @param string $value Value to unserialize.
+     * @return mixed
+     */
+    protected function unserialize(string $value) {
+        if ( preg_match('/^[-]?\d+$/', $value) ) {
+            return (int)$value;
+        }
+        
+        return unserialize($value);
+    }
+    
+    protected function __debug(BaseException $e, array $context=[], bool $throw=false) {
+        if ( $this->_debug ) {
+            $context += [
+                'code'          => $e->getCode(),
+                'line'          => $e->getLine(),
+                'file'          => $e->getFile(),
+                'class'         => get_class($e),
+            ];
+            
+            Log::debug($e->getMessage(), $context);
+        }
+        
+        if ( $throw ) {
+            throw new Exception($e->getMessage(), $e->getCode(), $e);
+        }
+    }
+    
+    /**
+     * {@inheritDoc}
      * @see \Psr\SimpleCache\CacheInterface::get()
      */
-    public function get(string $key, $default=null, array $options=[]) {
-        // TODO Auto-generated method stub
+    public function get($key, $default=null) {
+        list($key, $field) = $this->_hashKey($key);
         
+        try {
+            if ( !empty($field) && $field == '*' ) {
+                $values = $this->_client->hgetall($key);
+                
+                foreach ($values as $k=>$val) {
+                    $values[$k] = is_null($val) ? $default : $this->unserialize($val);
+                }
+                
+                return $values;
+            }
+            
+            if ( empty($field) ) {
+                $value = $this->_client->get($key);
+                
+            } else {
+                $value = $this->_client->hget($key, $field);
+            }
+            
+            if ( is_null($value) ) {
+                return $default;
+            }
+            
+            return $this->unserialize($value);
+            
+        } catch (ClientException $e) {
+            $this->__debug($e, compact('key', 'field', 'func'), false);
+            
+            return $default;
+        }
     }
 
     /**
      * {@inheritDoc}
      * @see \Psr\SimpleCache\CacheInterface::set()
      */
-    public function set(string $key, $value, $ttl=null) {
-        // TODO Auto-generated method stub
+    public function set($key, $value, $ttl=null): bool {
+        list($key, $field) = $this->_hashKey($key);
+        $value = $this->serialize($value);
+        $duration = $this->duration($ttl);
+        $func = empty($field) ? 'get' : 'hget';
         
+        try {
+            if ( empty($field) ) {
+                $result = $this->_client->set($key, $value);
+                
+                if ( $duration > 0) {
+                    $this->_client->expire($key, $duration); 
+                }
+                
+            } else {
+                $result = $this->_client->hset($key, $field, $value);
+            }
+            
+            if ( $result instanceof Status ) {
+                return ($result->getPayload() == self::STATUS_SUCCESS);
+            }
+            
+            return ($result > 0);
+            
+        } catch (ClientException $e) {
+            $this->__debug($e, compact('key', 'field', 'value', 'func', 'duration'), false);
+        }
+        
+        return false;
     }
 
     /**
      * {@inheritDoc}
      * @see \Psr\SimpleCache\CacheInterface::delete()
      */
-    public function delete(string $key) {
-        // TODO Auto-generated method stub
+    public function delete($key): bool {
+        list($key, $field) = $this->_hashKey($key);
         
+        try {
+            if ( empty($field) ) {
+                $result = $this->_client->del([$key]);
+                
+            } else {
+                $result = $this->_client->hdel($key, [$field]);
+            }
+            
+            if ( $result instanceof Status ) {
+                return ($result->getPayload() == self::STATUS_SUCCESS);
+            }
+            
+            return ($result > 0);
+            
+        } catch (ClientException $e) {
+            $this->__debug($e, compact('key', 'field'), false);
+        }
+        
+        return false;
     }
 
     /**
      * {@inheritDoc}
      * @see \Psr\SimpleCache\CacheInterface::clear()
      */
-    public function clear() {
-        // TODO Auto-generated method stub
+    public function clear(): bool {
+        $isAllDeleted = true;
+        $pattern = '*';
         
+        try {
+            $iterator = new Keyspace($this->_client, $pattern);
+            
+            foreach ($iterator as $key) {
+                $isDeleted = ($this->_client->del([$key]) > 0);
+                $isAllDeleted = $isAllDeleted && $isDeleted;
+            }
+            
+            return $isAllDeleted;
+            
+        } catch (ClientException $e) {
+            $this->__debug($e, ['pattern'=>$pattern], false);
+        }
+        
+        return false;
     }
 
     /**
      * {@inheritDoc}
      * @see \Psr\SimpleCache\CacheInterface::getMultiple()
      */
-    public function getMultiple(array $keys, $default = null) {
-        // TODO Auto-generated method stub
+    public function getMultiple($keys, $default=null): iterable {
+        $data = [];
+        $this->ensureValidType($keys);
         
+        foreach ($keys as $key) {
+            $data[$key] = $this->get($key, $default);
+        }
+        
+        return $data;
     }
 
     /**
      * {@inheritDoc}
      * @see \Psr\SimpleCache\CacheInterface::setMultiple()
      */
-    public function setMultiple(array $values, $ttl = null) {
-        // TODO Auto-generated method stub
+    public function setMultiple($values, $ttl=null): bool {
+        $duration = $this->duration($ttl);
+        $this->ensureValidType($values, self::CHECK_KEY);
         
+        foreach ($values as $key=>$value) {
+            $success = $this->set($key, $value, $duration);
+            
+            if ( !$success ) {
+                return false;
+            }
+        }
+        
+        return true;
     }
 
     /**
      * {@inheritDoc}
      * @see \Psr\SimpleCache\CacheInterface::deleteMultiple()
      */
-    public function deleteMultiple(array $keys) {
-        // TODO Auto-generated method stub
+    public function deleteMultiple($keys): bool {
+        $dictionary = [];
+        $isAllDeleted = true;
+        $this->ensureValidType($keys);
         
+        try {
+            foreach ($keys as $key) {
+                list($key, $field) = $this->_hashKey($key);
+                
+                if ( !empty($field) ) {
+                    $isDeleted = ($this->_client->hdel($key, [$field]) > 0);
+                    $isAllDeleted = $isAllDeleted && $isDeleted;
+                    
+                } else {
+                    $dictionary[] = $key;
+                }
+            }
+            
+            $result = ($this->_client->del($dictionary) == count($dictionary));
+            
+            return ($isAllDeleted && $result);
+        
+        } catch (ClientException $e) {
+            $this->__debug($e, compact('keys', 'dictionary'), false);
+        }
+        
+        return false;
     }
-
+    
     /**
      * {@inheritDoc}
      * @see \Psr\SimpleCache\CacheInterface::has()
      */
-    public function has(string $key) {
-        // TODO Auto-generated method stub
+    public function has($key): bool {
+        list($key, $field) = $this->_hashKey($key);
         
+        try {
+            if ( empty($field) ) {
+                $result = $this->_client->exists($key);
+                
+            } else {
+                $result = $this->_client->hexists($key, $field);
+            }
+            
+            return ($result > 0);
+            
+        } catch (ClientException $e) {
+            $this->__debug($e, compact('key', 'field'), false);
+        }
+        
+        return false;
     }
+    
+    /**
+     * Set expiration on a key
+     * @param  string $key
+     * @param  null|int|\DateInterval $ttl
+     * @return bool
+     */
+    public function expire(string $key, $ttl=null): bool {
+        list($key,) = $this->_hashKey($key);
+        $duration = $this->duration(null);
+        
+        if ( $duration > 0 ) {
+            try {
+                $result = $this->_client->expire($key, $duration);
+                
+                if ( $result instanceof Status ) {
+                    return ($result->getPayload() == self::STATUS_SUCCESS);
+                }
+                
+                return ($result > 0);
+            
+            } catch (ClientException $e) {
+                $this->__debug($e, compact('key', 'duration'), false);
+            }
+        }
+        
+        return false;
+    }
+    
     /**
      * {@inheritDoc}
      * @see \Cake\Cache\CacheEngineInterface::add()
      */
-    public function add(string $key, $value): bool {
-        // TODO Auto-generated method stub
+    public function add($key, $value): bool {
+        list($key, $field) = $this->_hashKey($key);
+        $value = $this->serialize($value);
         
+        try {
+            if ( empty($field) ) {
+                $duration = $this->duration(null);
+                $added = $this->_client->setnx($key, $value);
+                
+                if ( $duration > 0 ) {
+                    $this->_client->expire($key, $duration);
+                }
+                
+            } else {
+                $added = $this->_client->hsetnx($key, $field, $value);
+            }
+            
+            return ($added > 0);
+        
+        } catch (ClientException $e) {
+            $this->__debug($e, compact('key', 'field', 'value'), false);
+        }
+        
+        return false;
     }
 
     /**
      * {@inheritDoc}
      * @see \Cake\Cache\CacheEngineInterface::increment()
      */
-    public function increment(string $key, int $offset = 1) {
-        // TODO Auto-generated method stub
+    public function increment($key, int $offset=1) {
+        list($key, $field) = $this->_hashKey($key);
         
+        try {
+            if ( empty($field) ) {
+                $duration = $this->duration(null);
+                $result = $this->_client->incrby($key, abs($offset));
+                
+                if ( $duration > 0 ) {
+                    $this->_client->expire($key, $duration);
+                }
+                
+            } else {
+                $result = $this->_client->hincrby($key, $field, abs($offset));
+            }
+            
+            return (int)$result;
+            
+        } catch (ClientException $e) {
+            $this->__debug($e, compact('key', 'offset'), false);
+        }
+        
+        return false;
     }
 
     /**
      * {@inheritDoc}
      * @see \Cake\Cache\CacheEngineInterface::decrement()
      */
-    public function decrement(string $key, int $offset = 1) {
-        // TODO Auto-generated method stub
+    public function decrement($key, int $offset=1) {
+        list($key, $field) = $this->_hashKey($key);
         
+        try {
+            if ( empty($field) ) {
+                $duration = $this->duration(null);
+                $result = $this->_client->decrby($key, -abs($offset));
+                
+                if ( $duration > 0 ) {
+                    $this->_client->expire($key, $duration);
+                }
+                
+            } else {
+                $result = $this->_client->hincrby($key, $field, -abs($offset));
+            }
+            
+            return (int)$result;
+            
+        } catch (ClientException $e) {
+            $this->__debug($e, compact('key', 'offset'), false);
+        }
+        
+        return false;
     }
 
     /**
      * {@inheritDoc}
      * @see \Cake\Cache\CacheEngineInterface::clearGroup()
      */
-    public function clearGroup(\Cake\Cache\string $group): bool {
-        // TODO Auto-generated method stub
-        
+    public function clearGroup($group): bool {
+        return (bool)$this->_client->incr($this->_config['prefix'] . $group);
     }
-
-
     
+    /**
+     * Disconnects from the redis server
+     */
+    public function __destruct() {
+        if ( empty($this->_config['persistent']) && $this->connected() ) {
+            $this->_client->disconnect();
+        }
+    }
 }

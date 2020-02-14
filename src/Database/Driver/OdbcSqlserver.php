@@ -2,7 +2,6 @@
 
 namespace MikeWeb\CakeSources\Database\Driver;
 
-use PDO;
 use Cake\Database\Driver\Sqlserver;
 use Cake\Database\Dialect\SqlserverDialectTrait;
 use MikeWeb\CakeSources\Database\Driver\OdbcTrait;
@@ -10,13 +9,23 @@ use MikeWeb\CakeSources\Database\Driver\OdbcTrait;
 
 class OdbcSqlserver extends Sqlserver {
     
-    use OdbcTrait, SqlserverDialectTrait;
+    use OdbcTrait, SqlserverDialectTrait {
+        enabled as protected _odbcEnabled;
+    }
     
     /**
      * {@inheritDoc}
      */
     public function enabled(): bool {
-        return ( in_array('odbc', PDO::getAvailableDrivers()) );
+        $odbcEnabled = $this->_odbcEnabled();
+        
+        if ( !$odbcEnabled ) {
+            return false;
+        }
+        
+        $drivers = $this->getOdbcDriverMap('sqlserver');
+        
+        return (!empty($drivers));
     }
     
     /**
