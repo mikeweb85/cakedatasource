@@ -55,8 +55,8 @@ class SoapClient extends Client {
         }
         
         if (!isset($options['stream_context'])) {
-            $defaultContextOptions  = Configure::read('Stream.Context.default') ?: [];
-            $soapContextOptions     = Configure::read('Stream.Context.soap') ?: [];
+            $defaultContextOptions  = Configure::read('Stream.Context.default', []);
+            $soapContextOptions     = Configure::read('Stream.Context.soap', []);
             $contextOptions         = isset($options['options']) ? $options['options'] : [];
             
             $options['stream_context'] = stream_context_create(Hash::merge($defaultContextOptions, $soapContextOptions, $contextOptions));

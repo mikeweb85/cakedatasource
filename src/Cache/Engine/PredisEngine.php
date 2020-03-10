@@ -526,7 +526,7 @@ class PredisEngine extends CacheEngine implements CacheEngineInterface, CacheInt
      * {@inheritDoc}
      * @see \Psr\SimpleCache\CacheInterface::clear()
      */
-    public function clear(): bool {
+    public function clear($check=false): bool {
         $isAllDeleted = true;
         $pattern = '*';
         
@@ -700,7 +700,7 @@ class PredisEngine extends CacheEngine implements CacheEngineInterface, CacheInt
      * {@inheritDoc}
      * @see \Cake\Cache\CacheEngineInterface::increment()
      */
-    public function increment($key, int $offset=1) {
+    public function increment($key, $offset=1) {
         list($key, $field) = $this->_hashKey($key);
         
         try {
@@ -729,7 +729,7 @@ class PredisEngine extends CacheEngine implements CacheEngineInterface, CacheInt
      * {@inheritDoc}
      * @see \Cake\Cache\CacheEngineInterface::decrement()
      */
-    public function decrement($key, int $offset=1) {
+    public function decrement($key, $offset=1) {
         list($key, $field) = $this->_hashKey($key);
         
         try {
@@ -770,4 +770,20 @@ class PredisEngine extends CacheEngine implements CacheEngineInterface, CacheInt
             $this->_client->disconnect();
         }
     }
+    /**
+     * {@inheritDoc}
+     * @see \Cake\Cache\CacheEngine::write()
+     */
+    public function write ($key, $value, $ttl=null) {
+        return $this->set($key, $value, $ttl);
+    }
+
+    /**
+     * {@inheritDoc}
+     * @see \Cake\Cache\CacheEngine::read()
+     */
+    public function read ($key, $default=null) {
+        return $this->get($key, $default);
+    }
+
 }

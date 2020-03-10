@@ -1,9 +1,8 @@
 <?php
 declare(strict_types=1);
 
-namespace MikeWeb\CakeSources\Datasource\Predis;
+namespace MikeWeb\CakeSources\Predis;
 
-use MikeWeb\Dsn\Dsn;
 use InvalidArgumentException;
 use Cake\Utility\Text;
 use Cake\Utility\Hash;
@@ -15,7 +14,6 @@ use Predis\Connection\PhpiredisSocketConnection;
 use Predis\Connection\PhpiredisStreamConnection;
 use Predis\Collection\Iterator\Keyspace;
 use Cake\Datasource\ConnectionInterface;
-use MikeWeb\CakeSources\Datasource\Predis\ConnectionManager;
 use Cake\Database\TypeConverterTrait;
 use Cake\Database\Schema\CollectionInterface;
 use Cake\Database\StatementInterface;
@@ -29,13 +27,10 @@ use \Psr\Log\LoggerInterface;
 
 class Connection implements ConnectionInterface {
     
-    use InstanceConfigTrait;
-    
-    protected static $_registry;
+    use TypeConverterTrait;
     
     /**
      * Contains the configuration params for this connection.
-     *
      * @var array
      */
     protected $_config;
@@ -47,6 +42,13 @@ class Connection implements ConnectionInterface {
      * @var \MikeWeb\CakeSources\Datasource\Predis\Client
      */
     protected $_driver;
+    
+    /**
+     * Predis client object
+     * 
+     * @var \Predis\Client;
+     */
+    protected $_client;
     
     /**
      * Contains how many nested transactions have been started.
@@ -131,10 +133,6 @@ class Connection implements ConnectionInterface {
         'timeout'               => 5,
         'profile'               => null,
     ];
-        
-    protected function parseDsn(string $config): array {
-        return ConnectionManager::parseDsn($config);
-    }
     
     public function getDriver() {
         return $this->_driver;
@@ -410,4 +408,47 @@ class Connection implements ConnectionInterface {
             'logger' => $this->_logger,
         ];
     }
+    
+    /**
+     * {@inheritDoc}
+     * @see \Cake\Datasource\ConnectionInterface::logQueries()
+     */
+    public function logQueries($enable=null) {
+        // TODO: Auto-generated method stub
+    }
+
+    /**
+     * {@inheritDoc}
+     * @see \Cake\Datasource\ConnectionInterface::logger()
+     */
+    public function logger($instance=null) {
+        deprecationWarning(
+                'Connection::logger() is deprecated. ' .
+                'Use Connection::setLogger()/getLogger() instead.'
+                );
+        
+        if ($instance === null) {
+            return $this->getLogger();
+        }
+        
+        $this->setLogger($instance);
+    }
+
+    /**
+     * {@inheritDoc}
+     * @see \Cake\Datasource\ConnectionInterface::disableSavePoints()
+     */
+    public function disableSavePoints() {
+        // TODO: Auto-generated method stub
+    }
+
+    /**
+     * {@inheritDoc}
+     * @see \Cake\Datasource\ConnectionInterface::quote($value, $type)
+     */
+    public function quote($value, $type = null) {
+    // TODO: Auto-generated method stub
+
+    }
+
 }

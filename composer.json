@@ -14,7 +14,7 @@
     "license": "MIT",
     "require": {
     	"ext-odbc": "*",
-	"ext-phpiredis": "*",
+		"ext-phpiredis": "*",
         "predis/predis": "^1.1",
         "cakephp/cakephp": "^3.7|^3.8",
         "giggsey/libphonenumber-for-php": "^8.11"
