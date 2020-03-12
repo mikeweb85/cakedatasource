@@ -15,6 +15,7 @@ use Cake\Log\LogTrait;
 use SoapClient as Client;
 use Cake\Core\Exception\Exception;
 
+
 class SoapClient extends Client {
     
     const AUTHENTICATION_NTLM = -1;

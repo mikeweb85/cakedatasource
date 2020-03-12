@@ -2,7 +2,6 @@
 
 namespace MikeWeb\CakeSources\I18n;
 
-
 use Cake\Core\Configure;
 use Cake\Log\Log;
 use libphonenumber\PhoneNumberUtil;

@@ -22,6 +22,7 @@ use Predis\Connection\PhpiredisSocketConnection;
 use Predis\Connection\PhpiredisStreamConnection;
 use Predis\Connection\AggregateConnectionInterface;
 
+use DateInterval;
 use Exception as BaseException;
 
 
@@ -39,6 +40,10 @@ class PredisEngine extends CacheEngine implements CacheEngineInterface, CacheInt
     protected const SERIALIZE_PHP = 'php';
     
     protected const STATUS_SUCCESS = 'OK';
+    
+    protected const CHECK_KEY = 'key';
+    
+    protected const CHECK_VALUE = 'value';
     
     /**
      * Client for Redis connection
@@ -108,6 +113,65 @@ class PredisEngine extends CacheEngine implements CacheEngineInterface, CacheInt
         'timeout'               => 5,
         'read_write_timeout'    => null,
     ];
+    
+    /**
+     * Ensure the validity of the given cache key.
+     *
+     * @param string $key Key to check.
+     * @return void
+     * @throws \Cake\Cache\InvalidArgumentException When the key is not valid.
+     */
+    protected function ensureValidKey($key): void {
+        if (!is_string($key) || strlen($key) === 0) {
+            throw new InvalidArgumentException('A cache key must be a non-empty string.');
+        }
+    }
+    
+    /**
+     * Ensure the validity of the argument type and cache keys.
+     *
+     * @param iterable $iterable The iterable to check.
+     * @param string $check Whether to check keys or values.
+     * @return void
+     * @throws \Cake\Cache\InvalidArgumentException
+     */
+    protected function ensureValidType($iterable, string $check = self::CHECK_VALUE): void {
+        if (!is_iterable($iterable)) {
+            throw new InvalidArgumentException(sprintf(
+                    'A cache %s must be either an array or a Traversable.',
+                    $check === self::CHECK_VALUE ? 'key set' : 'set'
+                    ));
+        }
+        
+        foreach ($iterable as $key => $value) {
+            if ($check === self::CHECK_VALUE) {
+                $this->ensureValidKey($value);
+            } else {
+                $this->ensureValidKey($key);
+            }
+        }
+    }
+    
+    /**
+     * Convert the various expressions of a TTL value into duration in seconds
+     *
+     * @param \DateInterval|int|null $ttl The TTL value of this item. If null is sent, the
+     *   driver's default duration will be used.
+     * @return int
+     */
+    protected function duration($ttl): int {
+        if ($ttl === null) {
+            return $this->_config['duration'];
+        }
+        if (is_int($ttl)) {
+            return $ttl;
+        }
+        if ($ttl instanceof DateInterval) {
+            return (int)$ttl->format('%s');
+        }
+        
+        throw new InvalidArgumentException('TTL values must be one of null, int, \DateInterval');
+    }
     
     /**
      * Returns Predis client used for connection
@@ -446,11 +510,11 @@ class PredisEngine extends CacheEngine implements CacheEngineInterface, CacheInt
                 $value = $this->_client->hget($key, $field);
             }
             
-            if ( is_null($value) ) {
-                return $default;
+            if ($value !== false && is_string($value)) {
+                return $this->unserialize($value);
             }
             
-            return $this->unserialize($value);
+            return $default;
             
         } catch (ClientException $e) {
             $this->__debug($e, compact('key', 'field', 'func'), false);
@@ -774,7 +838,7 @@ class PredisEngine extends CacheEngine implements CacheEngineInterface, CacheInt
      * {@inheritDoc}
      * @see \Cake\Cache\CacheEngine::write()
      */
-    public function write ($key, $value, $ttl=null) {
+    public function write($key, $value, $ttl=null) {
         return $this->set($key, $value, $ttl);
     }
 
@@ -782,8 +846,8 @@ class PredisEngine extends CacheEngine implements CacheEngineInterface, CacheInt
      * {@inheritDoc}
      * @see \Cake\Cache\CacheEngine::read()
      */
-    public function read ($key, $default=null) {
-        return $this->get($key, $default);
+    public function read($key) {
+        return $this->get($key, false);
     }
 
 }
