@@ -143,7 +143,7 @@ class Connection implements ConnectionInterface {
      *
      * Disconnects the driver to release the connection.
      */
-    public function __destruct(): void {
+    public function __destruct() {
         if (class_exists(Log::class)) {
             Log::warning('The connection is going to be closed but there is an active transaction.');
         }

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="WebServers">
+    <option name="servers">
+      <webServer id="1b5d7d40-c590-4ee5-ba34-b40bc0a468e7" name="mwserver005" url="http://mwserver005.mikeweb.local">
+        <fileTransfer host="mwserver005.mikeweb.local" port="22" accessType="SFTP" authAgent="true">
+          <advancedOptions>
+            <advancedOptions controlEncoding="UTF-8" dataProtectionLevel="Private" keepAliveTimeout="18000" passiveMode="true" shareSSLContext="true" />
+          </advancedOptions>
+          <option name="port" value="22" />
+        </fileTransfer>
+      </webServer>
+    </option>
+  </component>
+</project>

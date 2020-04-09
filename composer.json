@@ -5,7 +5,7 @@
 	"keywords" : [
 		"dsn",
 		"redis",
-		"predic",
+		"predis",
 		"odbc",
 		"sqlserver",
 		"amqp",
@@ -13,7 +13,10 @@
 	],
     "license": "MIT",
     "require": {
+        "php": ">=7.2",
+        "ext-json": "*",
     	"ext-odbc": "*",
+        "ext-ldap": "*",
         "predis/predis": "^1.1",
         "cakephp/cakephp": "^3.7|^3.8",
         "giggsey/libphonenumber-for-php": "^8.11"
