@@ -16,7 +16,7 @@ class PhoneNumber {
     /**
      * @param string $phone
      * @param string $ext
-     * @return PhoneNumber
+     * @return PhoneNumberObject
      * @throws NumberParseException
      */
     public static function parse($phone, $ext=null) {

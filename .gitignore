@@ -1,7 +1,6 @@
-#/composer.lock
+.idea/*
 /phpunit.xml
 /vendor
 .settings
 .project
 .buildpath
-.idea
