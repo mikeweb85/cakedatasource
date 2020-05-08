@@ -23,7 +23,7 @@ class SoapClient extends Client {
     const AUTHENTICATION_DIGEST = SOAP_AUTHENTICATION_DIGEST;
     
     use LogTrait;
-    
+
     /**
      * Constructor
      *
@@ -33,6 +33,7 @@ class SoapClient extends Client {
      *
      * @param string $wsdl path to SOAP WSDL definition
      * @param array $options The options
+     * @throws SoapFault
      */
     public function __construct($wsdl, $options=[]) {
         if (Configure::read('debug') === true) {
@@ -56,8 +57,8 @@ class SoapClient extends Client {
         }
         
         if (!isset($options['stream_context'])) {
-            $defaultContextOptions  = Configure::read('Stream.Context.default', []);
-            $soapContextOptions     = Configure::read('Stream.Context.soap', []);
+            $defaultContextOptions  = Configure::read('Stream.default', []);
+            $soapContextOptions     = Configure::read('Stream.soap', []);
             $contextOptions         = isset($options['options']) ? $options['options'] : [];
             
             $options['stream_context'] = stream_context_create(Hash::merge($defaultContextOptions, $soapContextOptions, $contextOptions));
@@ -66,15 +67,16 @@ class SoapClient extends Client {
         
         parent::SoapClient($wsdl, $options);
     }
-    
+
     /**
      * Performs a SOAP request
      * @param string $request The XML SOAP request.
      * @param string $location The URL to request.
      * @param string $action The SOAP action.
-     * @param int  $version The SOAP version.
+     * @param int $version The SOAP version.
      * @param int $oneWay If set to 1, this method returns nothing. Use this where a response is not expected.
      * @return string The XML SOAP response.
+     * @throws SoapFault
      */
     public function __doRequest($request, $location, $action, $version, $oneWay = 0) {
         if ( substr_count($request, '<?xml ') > 1 ) {
@@ -138,7 +140,7 @@ class SoapClient extends Client {
         
         return parent::__soapCall($functionName, $arguments, $options, $inputHeaders, $outputHeaders);
     }
-    
+
     /**
      * Calls a SOAP function from a request template
      * @param string $action The name of the SOAP function to call.
@@ -148,6 +150,7 @@ class SoapClient extends Client {
      * @param array $inputHeaders An array of headers to be sent along with the SOAP request.
      * @param array $outputHeaders If supplied, this array will be filled with the headers from the SOAP response.
      * @return mixed
+     * @throws SoapFault
      */
     public function __soapCallFromTemplate($action, $data=[], $template, $options=[], $inputHeaders=[], &$outputHeaders=[]) {
         $request = Text::insert($template, $data);
@@ -163,7 +166,7 @@ class SoapClient extends Client {
         
         return parent::__soapCall($action, [new SoapVar($request, XSD_ANYXML)], $options, $inputHeaders, $outputHeaders);
     }
-    
+
     /**
      * Calls a SOAP function from a SimpleXML Element
      * @param string $action The name of the SOAP function to call.
@@ -173,6 +176,7 @@ class SoapClient extends Client {
      * @param array $inputHeaders An array of headers to be sent along with the SOAP request.
      * @param array $outputHeaders If supplied, this array will be filled with the headers from the SOAP response.
      * @return mixed
+     * @throws SoapFault
      */
     public function __soapCallFromXml($action, $xml, $options=[], $inputHeaders=[], &$outputHeaders=[]) {
         if (is_string($xml)) {

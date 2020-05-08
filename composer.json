@@ -14,11 +14,8 @@
     "license": "MIT",
     "require": {
         "php": ">=7.2",
-        "ext-json": "*",
-    	"ext-odbc": "*",
-        "ext-ldap": "*",
-        "predis/predis": "^1.1",
         "cakephp/cakephp": "^3.7|^3.8",
+        "predis/predis": "^1.1",
         "giggsey/libphonenumber-for-php": "^8.11"
     },
     "require-dev": {
@@ -29,7 +26,11 @@
         "react/event-loop": "^1.1"
     },
     "suggest": {
-    	"ext-phpiredis": "*"
+        "ext-json": "*",
+        "ext-odbc": "*",
+        "ext-ldap": "*",
+    	"ext-phpiredis": "*",
+        "ext-soap": "*"
     },
     "autoload": {
         "psr-4": {

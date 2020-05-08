@@ -160,9 +160,8 @@ class PredisEngine extends CacheEngine implements CacheEngineInterface, CacheInt
      * @return int
      */
     protected function duration($ttl): int {
-        if ($ttl === null) {
-            return $this->_config['duration'];
-        }
+        $ttl = $ttl ?: $this->_config['duration'];
+
         if (is_int($ttl)) {
             return $ttl;
         }

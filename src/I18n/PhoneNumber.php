@@ -12,11 +12,12 @@ use libphonenumber\PhoneNumber as PhoneNumberObject;
 
 
 class PhoneNumber {
-    
+
     /**
      * @param string $phone
      * @param string $ext
      * @return PhoneNumber
+     * @throws NumberParseException
      */
     public static function parse($phone, $ext=null) {
         $matches = [];
@@ -59,12 +60,13 @@ class PhoneNumber {
             throw $e;
         }
     }
-    
+
     /**
-     * 
+     *
      * @param PhoneNumber|string $number
      * @param int $format
      * @return string
+     * @throws NumberParseException
      */
     public static function format($number, $format=null) {
         if ( !($number instanceof PhoneNumberObject) ) {
@@ -77,13 +79,14 @@ class PhoneNumber {
         
         return PhoneNumberUtil::getInstance()->format($number, $format);
     }
-    
-    
+
+
     /**
-     * 
+     *
      * @param PhoneNumber|string $number
      * @param string $lang
      * @return string
+     * @throws NumberParseException
      */
     public static function describe($number, $lang='en') {
         if ( !($number instanceof PhoneNumberObject) ) {
