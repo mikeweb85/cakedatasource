@@ -14,6 +14,8 @@
     "license": "MIT",
     "require": {
       "php": ">=7.2",
+      "ext-dom": "*",
+      "ext-simplexml": "*",
       "ext-json": "*",
       "ext-odbc": "*",
       "ext-soap": "*",
@@ -22,7 +24,8 @@
       "predis/predis": "^1.1",
       "giggsey/libphonenumber-for-php": "^8.11",
       "react/event-loop": "^1.1",
-      "malkusch/lock": "^2.1"
+      "malkusch/lock": "^2.1",
+      "sendgrid/sendgrid": "^7.5"
     },
     "require-dev": {
       "phpunit/phpunit": "^5.7.14|^6.0"
