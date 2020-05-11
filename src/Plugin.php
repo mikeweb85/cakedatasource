@@ -3,7 +3,10 @@
 namespace MikeWeb\CakeSources;
 
 use Cake\Core\BasePlugin;
+use Cake\Core\Configure;
 use Cake\Core\PluginApplicationInterface;
+use MikeWeb\CakeSources\Network\Context;
+use MikeWeb\CakeSources\Network\ContextRegistry;
 
 /**
  * Plugin for CakePHP Datasources
@@ -16,6 +19,12 @@ class Plugin extends BasePlugin {
      * @see \Cake\Core\BasePlugin::bootstrap()
      */
     public function bootstrap(PluginApplicationInterface $app): void {
-        ## TODO: Post load bootstrapping?
+        if ( Configure::check('StreamContext') ) {
+            $contextRegistry = ContextRegistry::getInstance();
+
+            foreach ( Configure::consume('StreamContext') as $streamContextName=>$streamContextConfig) {
+                $contextRegistry->load($streamContextName, $streamContextConfig);
+            }
+        }
     }
 }

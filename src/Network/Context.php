@@ -5,6 +5,7 @@ namespace MikeWeb\CakeSources\Network;
 
 use Cake\Core\Exception\Exception;
 use Cake\Core\InstanceConfigTrait;
+use Cake\Utility\Hash;
 
 
 class Context {
@@ -12,10 +13,9 @@ class Context {
     use InstanceConfigTrait;
 
     /**
-     * Default list of tracked PHP transports
      * @var array
      */
-    protected $_transports = ['socket', 'http', 'ssl', 'ftp', 'phar', 'mongodb', 'zip'];
+    protected $_contextParams = ['notification'];
 
     /**
      * Stream context resource
@@ -28,6 +28,8 @@ class Context {
      * @var array
      */
     protected $_defaultConfig = [
+        'base'              => null,
+        'default'           => false,
         'notification'      => null,
         'socket'            => [
             'tcp_nodelay'               => true,
@@ -55,6 +57,10 @@ class Context {
             unset($config['notification']);
         }
 
+        if ( isset($config['base']) ) {
+            $config = Hash::merge(ContextRegistry::getInstance()->get($config['base'])->getConfig(), $config);
+        }
+
         $this->setConfig($config);
     }
 
@@ -62,15 +68,22 @@ class Context {
      * @return bool
      */
     protected function initialize(): bool {
-        $options = [];
+        $options = $this->_config;
 
-        foreach ($this->_transports as $contextBlock) {
-            if ( isset($this->_config[$contextBlock]) && is_array($this->_config[$contextBlock])) {
-                $options[$contextBlock] = $this->_context[$contextBlock];
+        unset($options['base'], $options['default']);
+
+        foreach ($options as $wrapper=>$settings) {
+            if ( in_array($wrapper, $this->_contextParams) || !is_array($settings) ) {
+                unset($options[$wrapper]);
             }
         }
 
-        $this->_context = stream_context_create($options);
+        if ( $this->_config['default'] === true ) {
+            $this->_context = stream_context_set_default($options);
+
+        } else {
+            $this->_context = stream_context_create($options);
+        }
 
         if ( !is_resource($this->_context) ) {
             throw new Exception('Unrecognized context returned.');

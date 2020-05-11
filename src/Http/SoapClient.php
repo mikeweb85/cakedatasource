@@ -6,7 +6,6 @@ use SoapVar;
 use SoapFault;
 use DOMDocument;
 use SimpleXMLElement;
-use Cake\Utility\Hash;
 use Cake\Utility\Text;
 use Cake\Utility\Xml;
 use Cake\Core\Configure;
@@ -14,6 +13,9 @@ use Psr\Log\LogLevel;
 use Cake\Log\LogTrait;
 use SoapClient as Client;
 use Cake\Core\Exception\Exception;
+use InvalidArgumentException;
+use MikeWeb\CakeSources\Network\Context;
+use MikeWeb\CakeSources\Network\ContextRegistry;
 
 
 class SoapClient extends Client {
@@ -40,7 +42,7 @@ class SoapClient extends Client {
             $this->log($wsdl ?: $options['location'], LogLevel::INFO);
         }
         
-        if (isset($options['authentication']) && $options['authentication'] === self::AUTHENTICATION_NTLM) {
+        if (isset($options['authentication']) && $options['authentication'] === static::AUTHENTICATION_NTLM) {
             throw new SoapFault(500, 'NTLM authentication not supported.');
         }
         
@@ -48,24 +50,38 @@ class SoapClient extends Client {
             $options['cache_wsdl'] = WSDL_CACHE_NONE;
         }
         
-        if (!isset($options['trace']) && Configure::read('debug') === true) {
+        if (!isset($options['trace']) && Configure::read('debug', false) ) {
             $options['trace'] = true;
         }
         
         if (!isset($options['exceptions'])) {
             $options['exceptions'] = true;
         }
-        
-        if (!isset($options['stream_context'])) {
-            $defaultContextOptions  = Configure::read('Stream.default', []);
-            $soapContextOptions     = Configure::read('Stream.soap', []);
-            $contextOptions         = isset($options['options']) ? $options['options'] : [];
-            
-            $options['stream_context'] = stream_context_create(Hash::merge($defaultContextOptions, $soapContextOptions, $contextOptions));
+
+        if ( isset($options['stream_context']) ) {
+            switch (true) {
+                case empty($options['stream_context']):
+                    unset( $options['stream_context'] );
+                    break;
+
+                case is_resource($options['stream_context']):
+                    // do nothing, default client behavior
+                    break;
+
+                case ( $options['stream_context'] instanceOf Context ):
+                    $options['stream_context'] = $options['stream_context']->getContext();
+                    break;
+
+                case is_string($options['stream_context']):
+                    $options['stream_context'] = ContextRegistry::getInstance()->get($options['stream_context'])->getContext();
+                    break;
+
+                default:
+                    throw new InvalidArgumentException('Unrecognized stream context provided.');
+            }
         }
         
-        
-        parent::SoapClient($wsdl, $options);
+        return parent::__construct($wsdl, $options);
     }
 
     /**
@@ -152,7 +168,7 @@ class SoapClient extends Client {
      * @return mixed
      * @throws SoapFault
      */
-    public function __soapCallFromTemplate($action, $data=[], $template, $options=[], $inputHeaders=[], &$outputHeaders=[]) {
+    public function __soapCallFromTemplate(string $action, array $data, string $template, array $options=[], array $inputHeaders=[], &$outputHeaders=[]) {
         $request = Text::insert($template, $data);
         
         if (preg_match('/[0-9a-z]{3,8}:Envelope/im', $request)) {
@@ -170,15 +186,14 @@ class SoapClient extends Client {
     /**
      * Calls a SOAP function from a SimpleXML Element
      * @param string $action The name of the SOAP function to call.
-     * @param array $data An array of the arguments to pass to the function.
-     * @param string $template Template for request body
+     * @param string|SimpleXMLElement|DOMDocument $xml Template for request body
      * @param array $options An associative array of options to pass to the client.
      * @param array $inputHeaders An array of headers to be sent along with the SOAP request.
      * @param array $outputHeaders If supplied, this array will be filled with the headers from the SOAP response.
      * @return mixed
      * @throws SoapFault
      */
-    public function __soapCallFromXml($action, $xml, $options=[], $inputHeaders=[], &$outputHeaders=[]) {
+    public function __soapCallFromXml(string $action, $xml, array $options=[], array $inputHeaders=[], &$outputHeaders=[]) {
         if (is_string($xml)) {
             try {
                 $xml = Xml::build($xml);
