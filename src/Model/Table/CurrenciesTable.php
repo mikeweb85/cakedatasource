@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Model\Table;
+namespace MikeWeb\CakeSources\Model\Table;
 
 use MikeWeb\CakeSources\I18n\Currency;
 use MikeWeb\CakeSources\I18n\ExchangeRateProvider\OpenExchangeRates;
