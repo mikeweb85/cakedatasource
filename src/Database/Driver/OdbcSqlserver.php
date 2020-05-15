@@ -5,6 +5,7 @@ namespace MikeWeb\CakeSources\Database\Driver;
 use Cake\Database\Driver\Sqlserver;
 use Cake\Database\Dialect\SqlserverDialectTrait;
 use MikeWeb\CakeSources\Database\Driver\OdbcTrait;
+use Exception as PhpException;
 
 
 class OdbcSqlserver extends Sqlserver {
@@ -12,24 +13,24 @@ class OdbcSqlserver extends Sqlserver {
     use OdbcTrait, SqlserverDialectTrait {
         enabled as protected _odbcEnabled;
     }
-    
+
     /**
      * {@inheritDoc}
+     * @throws PhpException
      */
     public function enabled(): bool {
-        $odbcEnabled = $this->_odbcEnabled();
-        
-        if ( !$odbcEnabled ) {
+        if ( !$this->_odbcEnabled() ) {
             return false;
         }
         
-        $drivers = $this->getOdbcDriverMap('sqlserver');
+        $drivers = (array)$this->getOdbcDriverMap('sqlserver');
         
-        return (!empty($drivers));
+        return ( !empty($drivers) );
     }
-    
+
     /**
      * {@inheritDoc}
+     * @throws PhpException
      */
     public function connect(): bool {
         if ($this->_connection) {
@@ -39,7 +40,9 @@ class OdbcSqlserver extends Sqlserver {
         $config = $this->_config;
         
         if ( empty($config['driverName']) ) {
-            $config['driverName'] = 'SQL Native Client';
+            $drivers = (array)$this->getOdbcDriverMap('sqlserver');
+            $firstDriver = array_shift($drivers);
+            $config['driverName'] = $firstDriver['name'];
         }
         
         $dsn = "odbc:Driver={{$config['driverName']}};Server={$config['host']},{$config['port']};Database={$config['database']};";
@@ -69,5 +72,14 @@ class OdbcSqlserver extends Sqlserver {
      */
     public function supportsDynamicConstraints(): bool {
         return false;
+    }
+
+    /**
+     * @return int
+     * @throws PhpException
+     */
+    public function _version(): int {
+        $this->connect();
+        return (int)$this->_connection->query("SELECT SERVERPROPERTY('ProductVersion') as VERSION")->fetchColumn();
     }
 }

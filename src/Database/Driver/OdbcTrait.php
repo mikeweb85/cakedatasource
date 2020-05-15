@@ -11,10 +11,18 @@ use Cake\Utility\Hash;
 use Cake\Core\Configure;
 use Cake\Database\Driver;
 use InvalidArgumentException;
+use Cake\Core\Exception\Exception;
+use Exception as PhpException;
 
 
 trait OdbcTrait {
-    
+
+    /**
+     * @param string|null $protocol
+     * @param bool $reset
+     * @return iterable
+     * @throws PhpException
+     */
     public function getOdbcDriverMap(string $protocol=null, bool $reset=false): iterable {
         $map = [];
         $cache = Cache::pool('_cake_core_');
@@ -24,7 +32,7 @@ trait OdbcTrait {
         }
         
         if ( empty($map) ) {
-            $drivers = $this->getOdbcDrivers($reset);
+            $drivers = (array)$this->getOdbcDrivers($reset);
             $map = Hash::combine($drivers, '{n}.name', '{n}', '{n}.protocol');
             
             if ( !empty($map) ) {
@@ -44,18 +52,24 @@ trait OdbcTrait {
         
         return $map;
     }
-    
+
+    /**
+     * @param bool $reset
+     * @return iterable
+     * @throws PhpException
+     */
     public function getOdbcDriverList(bool $reset=false): iterable {
-        $drivers = $this->getOdbcDrivers($reset);
+        $drivers = (array)$this->getOdbcDrivers($reset);
         
         return Hash::extract($drivers, '{n}.name');
     }
-    
+
     /**
      * Returns a list of installed ODBC drivers parse from the system ODBCSYSINSTINI file
      * @param bool $reset
-     * @throws InvalidArgumentException
      * @return iterable
+     * @throws PhpException
+     * @throws InvalidArgumentException
      */
     public function getOdbcDrivers(bool $reset=false): iterable {
         $drivers = $matches = $driverMatch = [];
@@ -129,7 +143,10 @@ trait OdbcTrait {
         
         return $drivers;
     }
-    
+
+    /**
+     * @return bool
+     */
     public function enabled(): bool {
         return in_array('odbc', PDO::getAvailableDrivers());
     }
