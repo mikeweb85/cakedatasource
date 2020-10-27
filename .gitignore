@@ -1,4 +1,4 @@
-.idea/*
+.idea
 /phpunit.xml
 /vendor
 .settings
